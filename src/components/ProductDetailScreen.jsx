@@ -401,7 +401,7 @@ export default function ProductDetailScreen({
                 >
                   <div className="pack-card-left">
                     <div className="pack-title-row">
-                      <span className="pack-title">Pack of 6</span>
+                      <span className="pack-title">Pack of 6.</span>
                       <span className="pack-badge">Popular</span>
                     </div>
                     <span className="pack-desc">Save 10%</span>

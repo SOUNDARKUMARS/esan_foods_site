@@ -1248,11 +1248,14 @@
 }
 
 /* Spotlight Controls */
+.spotlight-actions-row,
 .spotlight-controls-row {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
   margin-bottom: 20px;
+  width: 100%;
 }
 
 .spotlight-stepper {
@@ -1261,8 +1264,33 @@
 }
 
 .spotlight-add-btn {
-  padding: 13px 28px;
+  padding: 13px 24px;
   font-size: 0.92rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+}
+
+.spotlight-details-btn {
+  padding: 12px 22px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-primary-dark);
+  border: 1.5px solid var(--color-primary-dark);
+  transition: all var(--transition-fast);
+}
+
+.spotlight-details-btn:hover {
+  background: var(--color-primary-dark);
+  color: #ffffff;
 }
 
 .spotlight-guarantee-note {
@@ -3304,14 +3332,14 @@ html, body {
     box-sizing: border-box !important;
   }
 
-  /* Hero Top Bar: Line 1 on left, Rating Badge in right corner opposite to it */
+  /* Hero Top Bar: Clean vertical stack on mobile so rating badge is never squished */
   .hero-headline-top-bar {
     display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
     gap: 8px !important;
     width: 100% !important;
-    margin-bottom: 4px !important;
+    margin-bottom: 6px !important;
   }
 
   .hero-headline-first-line {
@@ -3324,14 +3352,14 @@ html, body {
   }
 
   .hero-review-badge {
-    margin-bottom: 0 !important;
-    padding: 3px 8px 3px 4px !important;
-    font-size: 0.72rem !important;
-    max-width: 58% !important;
-    flex-shrink: 0 !important;
+    margin-bottom: 2px !important;
+    padding: 4px 12px 4px 5px !important;
+    font-size: 0.78rem !important;
+    max-width: 100% !important;
+    width: auto !important;
     display: inline-flex !important;
     align-items: center !important;
-    gap: 5px !important;
+    gap: 7px !important;
     background: rgba(255, 255, 255, 0.94) !important;
     backdrop-filter: blur(8px) !important;
     -webkit-backdrop-filter: blur(8px) !important;
@@ -3341,8 +3369,8 @@ html, body {
   }
 
   .badge-avatar {
-    width: 22px !important;
-    height: 22px !important;
+    width: 24px !important;
+    height: 24px !important;
   }
 
   .badge-rating-info {
@@ -3534,11 +3562,19 @@ html, body {
   .benefits-section,
   .faq-section,
   .site-footer {
-    padding: 36px 14px;
+    padding: 32px 14px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
   }
 
   .section-title {
-    font-size: clamp(1.5rem, 6.2vw, 2.1rem);
+    font-size: clamp(1.35rem, 5.8vw, 1.85rem) !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    max-width: 100% !important;
+    line-height: 1.2 !important;
   }
 
   .section-subtitle {
@@ -3717,26 +3753,59 @@ html, body {
     font-size: clamp(1.6rem, 6.5vw, 2.2rem);
   }
 
+  .nutrition-facts-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 12px 14px !important;
+  }
+
   .nutrition-pills-row {
-    flex-wrap: wrap;
-    gap: 6px;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  .nutri-pill {
+    font-size: 0.76rem !important;
   }
 
   .spotlight-actions-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 12px;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   .spotlight-actions-row .stepper-pill {
-    align-self: center;
-    width: 140px;
-    justify-content: space-between;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    height: 44px !important;
+    box-sizing: border-box !important;
   }
 
   .spotlight-add-btn {
-    width: 100%;
-    justify-content: center;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 46px !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    padding: 0 16px !important;
+    font-size: 0.92rem !important;
+  }
+
+  .spotlight-details-btn {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 44px !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    padding: 0 16px !important;
+    font-size: 0.88rem !important;
   }
 
   /* Benefits & Reviews on Mobile */
@@ -3788,23 +3857,44 @@ html, body {
   }
 
   .newsletter-form {
-    flex-direction: column;
-    min-width: auto;
-    width: 100%;
-    gap: 10px;
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
-  .newsletter-form input {
-    width: 100%;
-    border-radius: var(--radius-pill);
-    padding: 12px 16px;
+  .newsletter-input-group {
+    display: flex !important;
+    flex-direction: column !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    gap: 10px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
-  .newsletter-form button {
-    width: 100%;
-    border-radius: var(--radius-pill);
-    justify-content: center;
-    padding: 12px;
+  .newsletter-input-group input {
+    width: 100% !important;
+    background: #ffffff !important;
+    border-radius: var(--radius-pill) !important;
+    padding: 14px 18px !important;
+    font-size: 0.9rem !important;
+    box-sizing: border-box !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    outline: none !important;
+    color: #1a2a16 !important;
+  }
+
+  .newsletter-submit-btn {
+    width: 100% !important;
+    border-radius: var(--radius-pill) !important;
+    justify-content: center !important;
+    padding: 13px 20px !important;
+    font-size: 0.9rem !important;
+    box-sizing: border-box !important;
   }
 
   .footer-nav-grid {
