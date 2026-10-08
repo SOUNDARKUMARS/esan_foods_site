@@ -1,0 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+:root {
+  /* Color Palette - Fresh Organic Botanical Theme */
+  --color-frame-bg: #475a3a;
+  --color-canvas-bg: #fafbf8;
+  --color-surface-white: #ffffff;
+  --color-hero-bg: #d3e8b7;
+  --color-hero-bg-subtle: #e1f0cd;
+  --color-primary-dark: #1b2d18;
+  --color-primary-forest: #253d21;
+  --color-primary-accent: #37542f;
+  --color-text-main: #182715;
+  --color-text-muted: #5e6f57;
+  --color-text-light: #7f9178;
+  --color-border-subtle: #e2ead9;
+  --color-border-card: #e9efe2;
+  --color-card-bg: #f5f7f2;
+  --color-star-yellow: #f59e0b;
+  --color-badge-green: #e5f3d7;
+  --color-badge-text: #243c1f;
+  --color-danger: #ef4444;
+
+  /* Typography */
+  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Elevations */
+  --shadow-sm: 0 2px 6px rgba(27, 45, 24, 0.05);
+  --shadow-md: 0 8px 24px rgba(27, 45, 24, 0.08);
+  --shadow-lg: 0 16px 40px rgba(27, 45, 24, 0.12);
+  --shadow-floating: 0 24px 50px -12px rgba(27, 45, 24, 0.22);
+
+  /* Radii */
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-pill: 9999px;
+
+  /* Transitions */
+  --transition-fast: 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-smooth: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-bounce: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-family: var(--font-sans);
+  color: var(--color-text-main);
+  background-color: var(--color-canvas-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #2f3e26;
+}
+::-webkit-scrollbar-thumb {
+  background: #647d53;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7e9c6b;
+}
+
+/* Animations */
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(1.5deg);
+  }
+}
+
+@keyframes pulseSubtle {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.9;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes toastSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-float {
+  animation: floatGentle 5s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
