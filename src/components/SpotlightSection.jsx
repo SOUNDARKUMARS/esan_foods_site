@@ -1,16 +1,49 @@
-import React, { useState } from 'react'
-import { Plus, Minus, Check, Flame, Sparkles, Leaf } from 'lucide-react'
-import { PRODUCTS, passionSpotlight } from '../data/mockData'
+import React, { useState, useEffect } from 'react'
+import { Plus, Minus, Check, Flame, Sparkles, Leaf, Award, CheckCircle2 } from 'lucide-react'
+import { PRODUCTS as FALLBACK_PRODUCTS, passionSpotlight } from '../data/mockData'
 
-export default function SpotlightSection({ onAddToCart, onQuickView }) {
-  // Default to tinned-passion, but user can click any flavor in the mini selector!
-  const defaultProduct = PRODUCTS.find((p) => p.id === 'tinned-passion') || PRODUCTS[0]
-  const [activeProduct, setActiveProduct] = useState(defaultProduct)
+export default function SpotlightSection({
+  products,
+  featuredProductId = 'tinned-passion',
+  onUpdateFeaturedProductId,
+  isEditMode = false,
+  onAddToCart,
+  onQuickView,
+}) {
+  const productList = products && products.length > 0 ? products : FALLBACK_PRODUCTS
+
+  // Default to the admin-chosen featuredProductId
+  const initialProduct =
+    productList.find((p) => p.id === featuredProductId) ||
+    productList.find((p) => p.isFeatured) ||
+    productList[0]
+
+  const [activeProduct, setActiveProduct] = useState(initialProduct)
   const [qty, setQty] = useState(1)
+
+  useEffect(() => {
+    if (productList && productList.length > 0) {
+      const match =
+        productList.find((p) => p.id === featuredProductId) ||
+        productList.find((p) => p.id === activeProduct?.id) ||
+        productList[0]
+      setActiveProduct(match)
+    }
+  }, [featuredProductId, products])
+
+  if (!activeProduct) return null
+
+  const isCurrentFeaturedMasterpiece = activeProduct.id === featuredProductId
 
   const handleSelectProduct = (prod) => {
     setActiveProduct(prod)
     setQty(1)
+  }
+
+  const handleMakeFeatured = () => {
+    if (onUpdateFeaturedProductId) {
+      onUpdateFeaturedProductId(activeProduct.id)
+    }
   }
 
   const handleQtyChange = (delta) => {
@@ -19,9 +52,10 @@ export default function SpotlightSection({ onAddToCart, onQuickView }) {
 
   const totalPrice = (activeProduct.price * qty).toFixed(2)
 
-  // Use the special spotlight image for passion juice, or the product image for others
   const spotlightImg =
-    activeProduct.id === 'tinned-passion' ? passionSpotlight : activeProduct.image
+    activeProduct.id === 'tinned-passion' && passionSpotlight
+      ? passionSpotlight
+      : (activeProduct.image || activeProduct.galleryImages?.[0])
 
   return (
     <section className="spotlight-section" id="spotlight">
@@ -41,26 +75,57 @@ export default function SpotlightSection({ onAddToCart, onQuickView }) {
 
               {/* Thumbnail Mini Flavor Selector */}
               <div className="flavor-thumbnails-row">
-                {PRODUCTS.map((prod) => (
-                  <button
-                    key={prod.id}
-                    type="button"
-                    className={`flavor-thumb-btn ${activeProduct.id === prod.id ? 'active' : ''}`}
-                    onClick={() => handleSelectProduct(prod)}
-                    title={prod.name}
-                    aria-label={`Select ${prod.name}`}
-                  >
-                    <img src={prod.image} alt={prod.name} />
-                  </button>
-                ))}
+                {productList.map((prod) => {
+                  const isSavedFeatured = prod.id === featuredProductId
+                  return (
+                    <button
+                      key={prod.id}
+                      type="button"
+                      className={`flavor-thumb-btn ${activeProduct.id === prod.id ? 'active' : ''} ${
+                        isSavedFeatured ? 'has-masterpiece-star' : ''
+                      }`}
+                      onClick={() => handleSelectProduct(prod)}
+                      title={`${prod.name}${isSavedFeatured ? ' (Featured Masterpiece)' : ''}`}
+                      aria-label={`Select ${prod.name}`}
+                    >
+                      <img src={prod.image || prod.galleryImages?.[0]} alt={prod.name} />
+                      {isSavedFeatured && (
+                        <span className="masterpiece-star-badge" title="Featured Masterpiece">★</span>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
             {/* Right Information Column */}
             <div className="spotlight-info-col">
-              <div className="spotlight-badge-tag">
-                <Leaf size={14} />
-                <span>Featured Masterpiece</span>
+              <div className="spotlight-header-actions-row">
+                <div className="spotlight-badge-tag">
+                  <Leaf size={14} />
+                  <span>Featured Masterpiece</span>
+                </div>
+
+                {/* Admin Masterpiece Selector Button in Edit Mode */}
+                {isEditMode && (
+                  <div className="admin-masterpiece-selector-box">
+                    {isCurrentFeaturedMasterpiece ? (
+                      <span className="admin-masterpiece-confirmed">
+                        <CheckCircle2 size={13} /> Active Masterpiece
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn-set-masterpiece"
+                        onClick={handleMakeFeatured}
+                        title="Set this drink as the storefront featured masterpiece"
+                      >
+                        <Award size={13} />
+                        <span>Set as Masterpiece</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <h2 className="spotlight-title">{activeProduct.name.toUpperCase()}</h2>
@@ -92,28 +157,27 @@ export default function SpotlightSection({ onAddToCart, onQuickView }) {
                 </div>
                 <div className="nutrition-pills-row">
                   <span className="nutri-pill">
-                    Calories <strong>{activeProduct.nutrition.calories}</strong>
+                    Calories <strong>{activeProduct.nutrition?.calories || '90 kcal'}</strong>
                   </span>
                   <span className="nutri-pill">
-                    Sugar <strong>{activeProduct.nutrition.sugar}</strong>
+                    Sugar <strong>{activeProduct.nutrition?.sugar || '12g'}</strong>
                   </span>
                   <span className="nutri-pill">
-                    Vitamin C <strong>{activeProduct.nutrition.vitaminC || '100%'}</strong>
+                    Vitamin C <strong>{activeProduct.nutrition?.vitaminC || '100%'}</strong>
                   </span>
                 </div>
               </div>
 
               {/* Controls Row */}
-              <div className="spotlight-controls-row">
-                {/* Stepper */}
-                <div className="stepper-pill spotlight-stepper">
+              <div className="spotlight-actions-row">
+                <div className="stepper-pill">
                   <button
                     type="button"
                     className="stepper-btn"
                     onClick={() => handleQtyChange(-1)}
                     aria-label="Decrease quantity"
                   >
-                    <Minus size={13} />
+                    <Minus size={14} />
                   </button>
                   <span className="stepper-value">
                     {String(qty).padStart(2, '0')}
@@ -124,23 +188,26 @@ export default function SpotlightSection({ onAddToCart, onQuickView }) {
                     onClick={() => handleQtyChange(1)}
                     aria-label="Increase quantity"
                   >
-                    <Plus size={13} />
+                    <Plus size={14} />
                   </button>
                 </div>
 
-                {/* Add to Cart Pill Button */}
                 <button
                   type="button"
-                  className="add-to-cart-pill-btn spotlight-add-btn"
+                  className="btn-pill-primary spotlight-add-btn"
                   onClick={() => onAddToCart(activeProduct, qty)}
+                  id="spotlight-add-cart-btn"
                 >
-                  <span>Add to Cart - ${totalPrice}</span>
+                  <span>Add To Box — ${totalPrice}</span>
                 </button>
-              </div>
 
-              <div className="spotlight-guarantee-note">
-                <Check size={14} className="check-icon" />
-                <span>Cold-packed in 100% recyclable aluminum cans. Next-day delivery available.</span>
+                <button
+                  type="button"
+                  className="btn-pill-outline spotlight-details-btn"
+                  onClick={() => onQuickView(activeProduct)}
+                >
+                  <span>View Details</span>
+                </button>
               </div>
             </div>
           </div>

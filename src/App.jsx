@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate, Routes, Route, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Hero from './components/Hero'
 import CollectionsSection from './components/CollectionsSection'
@@ -10,6 +11,7 @@ import FaqSection from './components/FaqSection'
 import Footer from './components/Footer'
 import CartDrawer from './components/CartDrawer'
 import ProductModal from './components/ProductModal'
+import ProductDetailScreen from './components/ProductDetailScreen'
 import AuthModal from './components/AuthModal'
 import CheckoutModal from './components/CheckoutModal'
 import AdminDashboard from './components/AdminDashboard'
@@ -20,7 +22,20 @@ import {
   verifyCurrentSupabaseSession,
   clearSession,
   formatUserFromSupabase,
+  syncUserProfile,
 } from './data/authService'
+import {
+  fetchProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+} from './data/productService'
+import {
+  fetchSiteContent,
+  saveSiteContent,
+  DEFAULT_SITE_CONTENT,
+} from './data/siteContentService'
+import AdminInlineBar from './components/AdminInlineBar'
 import { supabase } from './lib/supabase'
 import { addAdminOrder } from './data/adminData'
 import './App.css'
@@ -31,24 +46,82 @@ export default function App() {
   const [isAdminView, setIsAdminView] = useState(false)
   const [authInitialized, setAuthInitialized] = useState(false)
 
-  // Dynamic products list stored locally so admin edits reflect on storefront!
-  const [products, setProducts] = useState(() => {
-    try {
-      const saved = localStorage.getItem('juicera_products_list')
-      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS
-    } catch (e) {
-      return INITIAL_PRODUCTS
-    }
-  })
+  // Products loaded directly from Supabase Database
+  const [products, setProducts] = useState(INITIAL_PRODUCTS)
+  const [isProductsLoading, setIsProductsLoading] = useState(true)
 
-  // Save product changes to localStorage
+  // Site Content (Hero, Masterpiece, Testimonials, FAQs, Why You'll Love)
+  const [siteContent, setSiteContent] = useState(DEFAULT_SITE_CONTENT)
+  const [savedSiteContent, setSavedSiteContent] = useState(DEFAULT_SITE_CONTENT)
+  const [adminEditorMode, setAdminEditorMode] = useState('edit') // 'edit' | 'preview'
+  const [isSavingContent, setIsSavingContent] = useState(false)
+
+  const isEditMode = currentUser?.role === 'admin' && adminEditorMode === 'edit' && !isAdminView
+  const hasContentChanges = JSON.stringify(siteContent) !== JSON.stringify(savedSiteContent)
+
+  // 1. Fetch live products and site content from Supabase
   useEffect(() => {
-    try {
-      localStorage.setItem('juicera_products_list', JSON.stringify(products))
-    } catch (e) {
-      console.error(e)
+    let isMounted = true
+
+    async function loadDatabaseData() {
+      try {
+        const [liveProducts, liveContent] = await Promise.all([
+          fetchProducts(),
+          fetchSiteContent(),
+        ])
+        if (isMounted && liveProducts && liveProducts.length > 0) {
+          setProducts(liveProducts)
+        }
+        if (isMounted && liveContent) {
+          setSiteContent(liveContent)
+          setSavedSiteContent(liveContent)
+        }
+      } catch (err) {
+        console.error('Failed to load database data:', err)
+      } finally {
+        if (isMounted) setIsProductsLoading(false)
+      }
     }
-  }, [products])
+
+    loadDatabaseData()
+
+    // Real-time synchronization for products
+    const productsChannel = supabase
+      .channel('public:products:changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        async () => {
+          const fresh = await fetchProducts()
+          if (isMounted && fresh && fresh.length > 0) {
+            setProducts(fresh)
+          }
+        }
+      )
+      .subscribe()
+
+    // Real-time synchronization for site_content
+    const contentChannel = supabase
+      .channel('public:site_content:changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'site_content' },
+        async () => {
+          const freshContent = await fetchSiteContent()
+          if (isMounted && freshContent) {
+            setSiteContent(freshContent)
+            setSavedSiteContent(freshContent)
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      isMounted = false
+      supabase.removeChannel(productsChannel)
+      supabase.removeChannel(contentChannel)
+    }
+  }, [])
 
   // Products & Filtering for Storefront
   const [selectedCategory, setSelectedCategory] = useState('All Flavors')
@@ -68,6 +141,8 @@ export default function App() {
 
   // Wishlist State
   const [wishlist, setWishlist] = useState(['guava-juice'])
+
+  const navigate = useNavigate()
 
   // Modals
   const [isCartOpen, setIsCartOpen] = useState(false)
@@ -96,20 +171,30 @@ export default function App() {
   }, [toast])
 
   // 1. Strictly verify session against Supabase on load
-  // If no session found from Supabase, it logs the user out and clears state!
   useEffect(() => {
+    let isMounted = true
+
     async function initSupabaseAuth() {
-      const auth = await verifyCurrentSupabaseSession()
-      if (!auth) {
-        // No session found from Supabase -> logged out
-        setCurrentUser(null)
-        setIsAdminView(false)
-      } else {
-        // Valid active session confirmed by Supabase
-        setCurrentUser(auth.user)
-        setIsAdminView(auth.isAdmin)
+      try {
+        const auth = await verifyCurrentSupabaseSession()
+        if (!isMounted) return
+        if (!auth) {
+          setCurrentUser(null)
+          setIsAdminView(false)
+        } else {
+          setCurrentUser(auth.user)
+          setIsAdminView(auth.isAdmin)
+        }
+      } catch (err) {
+        if (isMounted) {
+          setCurrentUser(null)
+          setIsAdminView(false)
+        }
+      } finally {
+        if (isMounted) {
+          setAuthInitialized(true)
+        }
       }
-      setAuthInitialized(true)
     }
 
     initSupabaseAuth()
@@ -117,19 +202,23 @@ export default function App() {
     // Real-time Supabase auth state listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session || event === 'SIGNED_OUT') {
-        clearSession()
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return
+
+      if (event === 'SIGNED_OUT' || !session) {
+        // Do NOT call clearSession() / signOut() here to avoid recursive infinite loop!
         setCurrentUser(null)
         setIsAdminView(false)
-      } else {
-        const appUser = formatUserFromSupabase(session.user)
+      } else if (session?.user) {
+        const appUser = await syncUserProfile(session.user)
+        if (!isMounted) return
         setCurrentUser(appUser)
-        setIsAdminView(appUser.role === 'admin')
+        setIsAdminView(appUser?.role === 'admin')
       }
     })
 
     return () => {
+      isMounted = false
       subscription?.unsubscribe()
     }
   }, [])
@@ -137,7 +226,8 @@ export default function App() {
   // Auth Handlers
   const handleAuthSuccess = (userObj, isAdmin) => {
     setCurrentUser(userObj)
-    if (isAdmin) {
+    const isUserAdmin = Boolean(isAdmin || userObj?.role === 'admin')
+    if (isUserAdmin) {
       setIsAdminView(true)
       showToast('Admin Console Unlocked 🛡️', 'Welcome, Administrator.')
     } else {
@@ -153,23 +243,71 @@ export default function App() {
     showToast('Signed Out', 'Your session has ended securely.')
   }
 
-  // Admin Product Management
-  const handleUpdateProduct = (updatedProd) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === updatedProd.id ? updatedProd : p))
-    )
-    showToast('Catalog Updated', `${updatedProd.name} changes applied live!`)
+  // Admin Product Management (Direct Supabase CRUD)
+  const handleUpdateProduct = async (updatedProd) => {
+    try {
+      // Optimistically update local view
+      setProducts((prev) =>
+        prev.map((p) => (p.id === updatedProd.id ? { ...p, ...updatedProd } : p))
+      )
+      const saved = await updateProduct(updatedProd.id, updatedProd)
+      setProducts((prev) =>
+        prev.map((p) => (p.id === saved.id ? saved : p))
+      )
+      showToast('Catalog Updated ✨', `${saved.name} saved to Supabase!`)
+    } catch (err) {
+      console.error('Failed to update product:', err)
+      showToast('Update Failed', err.message || 'Could not save changes to database.')
+      // Revert from DB
+      const fresh = await fetchProducts()
+      setProducts(fresh)
+    }
   }
 
-  const handleAddProduct = (newProd) => {
-    setProducts((prev) => [newProd, ...prev])
-    showToast('New Flavor Launched', `${newProd.name} added to catalog!`)
+  const handleAddProduct = async (newProd) => {
+    try {
+      const saved = await createProduct(newProd)
+      setProducts((prev) => [saved, ...prev])
+      showToast('New Flavor Launched 🚀', `${saved.name} saved in database!`)
+    } catch (err) {
+      console.error('Failed to add product:', err)
+      showToast('Creation Failed', err.message || 'Could not create product in database.')
+    }
   }
 
-  const handleDeleteProduct = (productId) => {
+  const handleDeleteProduct = async (productId) => {
     const item = products.find((p) => p.id === productId)
-    setProducts((prev) => prev.filter((p) => p.id !== productId))
-    showToast('Product Removed', `${item?.name || 'Drink'} removed from catalog.`)
+    try {
+      setProducts((prev) => prev.filter((p) => p.id !== productId))
+      await deleteProduct(productId)
+      showToast('Product Removed 🗑️', `${item?.name || 'Drink'} deleted from database.`)
+    } catch (err) {
+      console.error('Failed to delete product:', err)
+      showToast('Delete Failed', err.message || 'Could not delete product.')
+      const fresh = await fetchProducts()
+      setProducts(fresh)
+    }
+  }
+
+  // Site Content Handlers (Inline CMS)
+  const handleSaveSiteContent = async () => {
+    setIsSavingContent(true)
+    try {
+      const saved = await saveSiteContent(siteContent)
+      setSiteContent(saved)
+      setSavedSiteContent(saved)
+      showToast('Live Changes Saved! 🚀', 'Updated storefront content in database.')
+    } catch (err) {
+      console.error('Failed to save site content:', err)
+      showToast('Save Failed', err.message || 'Could not update content in database.')
+    } finally {
+      setIsSavingContent(false)
+    }
+  }
+
+  const handleDiscardSiteContent = () => {
+    setSiteContent(savedSiteContent)
+    showToast('Changes Discarded', 'Restored back to current database version.')
   }
 
   // Cart Handlers
@@ -278,53 +416,132 @@ export default function App() {
           onSearchChange={setSearchQuery}
           wishlistCount={wishlist.length}
           onOpenWishlist={() => {
+            navigate('/#collections')
             setSelectedCategory('All Flavors')
-            document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
+            setTimeout(() => {
+              document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
+            }, 100)
           }}
+          onGoHome={() => navigate('/')}
         />
 
-        {/* Hero Section */}
-        <Hero
-          onShopClick={() => {
-            document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
-          }}
-          onExploreClick={() => {
-            document.getElementById('spotlight')?.scrollIntoView({ behavior: 'smooth' })
-          }}
-        />
+        {/* Client-side Route Endpoints */}
+        <Routes>
+          {/* Main Storefront Root Endpoint (/) */}
+          <Route
+            path="/"
+            element={
+              <>
+                {/* Hero Section */}
+                <Hero
+                  heroContent={siteContent.hero}
+                  isEditMode={isEditMode}
+                  onUpdateHero={(h) => setSiteContent((prev) => ({ ...prev, hero: h }))}
+                  onShopClick={() => {
+                    document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
+                  }}
+                  onExploreClick={() => {
+                    document.getElementById('spotlight')?.scrollIntoView({ behavior: 'smooth' })
+                  }}
+                />
 
-        {/* Discover Our Collections Grid */}
-        <CollectionsSection
-          products={filteredProducts}
-          onAddToCart={handleAddToCart}
-          onQuickView={(prod) => setQuickViewProduct(prod)}
-          wishlist={wishlist}
-          onToggleWishlist={handleToggleWishlist}
-          selectedCategory={selectedCategory}
-          onSelectCategory={setSelectedCategory}
-        />
+                {/* Discover Our Collections Grid */}
+                <CollectionsSection
+                  products={filteredProducts}
+                  onAddToCart={handleAddToCart}
+                  onQuickView={(prod) => setQuickViewProduct(prod)}
+                  onOpenDetail={(prod) => navigate(`/product/${prod.id}`)}
+                  wishlist={wishlist}
+                  onToggleWishlist={handleToggleWishlist}
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={setSelectedCategory}
+                />
 
-        {/* Featured Spotlight: Tinned Passion Juice */}
-        <SpotlightSection
-          onAddToCart={handleAddToCart}
-          onQuickView={(prod) => setQuickViewProduct(prod)}
-        />
+                {/* Featured Spotlight: Masterpiece Drink Showcase */}
+                <SpotlightSection
+                  products={products}
+                  featuredProductId={siteContent.featuredProductId}
+                  onUpdateFeaturedProductId={(id) =>
+                    setSiteContent((prev) => ({ ...prev, featuredProductId: id }))
+                  }
+                  isEditMode={isEditMode}
+                  onAddToCart={handleAddToCart}
+                  onQuickView={(prod) => setQuickViewProduct(prod)}
+                  onOpenDetail={(prod) => navigate(`/product/${prod.id}`)}
+                />
 
-        {/* What Our Customers Say */}
-        <CustomerReviewsSection />
+                {/* What Our Customers Say */}
+                <CustomerReviewsSection
+                  testimonials={siteContent.testimonials}
+                  isEditMode={isEditMode}
+                  onUpdateTestimonials={(t) =>
+                    setSiteContent((prev) => ({ ...prev, testimonials: t }))
+                  }
+                />
 
-        {/* Why You'll Love This Drink */}
-        <WhyYouLoveSection />
+                {/* Why You'll Love This Drink */}
+                <WhyYouLoveSection
+                  benefits={siteContent.whyLove}
+                  isEditMode={isEditMode}
+                  onUpdateBenefits={(b) =>
+                    setSiteContent((prev) => ({ ...prev, whyLove: b }))
+                  }
+                />
 
-        {/* Bottom CTA Banner */}
-        <CtaBanner
-          onOrderNow={() => {
-            document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
-          }}
-        />
+                {/* Bottom CTA Banner */}
+                <CtaBanner
+                  onOrderNow={() => {
+                    document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
+                  }}
+                />
 
-        {/* FAQ Accordion */}
-        <FaqSection />
+                {/* FAQ Accordion */}
+                <FaqSection
+                  faqs={siteContent.faqs}
+                  isEditMode={isEditMode}
+                  onUpdateFaqs={(f) =>
+                    setSiteContent((prev) => ({ ...prev, faqs: f }))
+                  }
+                />
+              </>
+            }
+          />
+
+          {/* Dedicated Product Detail Route Endpoint (/product/:productId) */}
+          <Route
+            path="/product/:productId"
+            element={
+              <ProductDetailScreen
+                allProducts={products}
+                onBack={() => navigate('/#collections')}
+                onAddToCart={handleAddToCart}
+                onQuickView={(prod) => setQuickViewProduct(prod)}
+                onSelectProduct={(prod) => navigate(`/product/${prod.id}`)}
+                wishlist={wishlist}
+                onToggleWishlist={handleToggleWishlist}
+              />
+            }
+          />
+
+          {/* Alternate plural endpoint (/products/:productId) */}
+          <Route
+            path="/products/:productId"
+            element={
+              <ProductDetailScreen
+                allProducts={products}
+                onBack={() => navigate('/#collections')}
+                onAddToCart={handleAddToCart}
+                onQuickView={(prod) => setQuickViewProduct(prod)}
+                onSelectProduct={(prod) => navigate(`/product/${prod.id}`)}
+                wishlist={wishlist}
+                onToggleWishlist={handleToggleWishlist}
+              />
+            }
+          />
+
+          {/* Catch-all fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
 
         {/* Footer */}
         <Footer
@@ -333,6 +550,20 @@ export default function App() {
           }}
         />
       </main>
+
+      {/* Floating Inline Admin Toolbar for live in-place website editing */}
+      {currentUser?.role === 'admin' && !isAdminView && (
+        <AdminInlineBar
+          isEditMode={adminEditorMode === 'edit'}
+          onToggleMode={() =>
+            setAdminEditorMode((prev) => (prev === 'edit' ? 'preview' : 'edit'))
+          }
+          hasChanges={hasContentChanges}
+          onSave={handleSaveSiteContent}
+          onDiscard={handleDiscardSiteContent}
+          isSaving={isSavingContent}
+        />
+      )}
 
       {/* Slide-over Cart Drawer */}
       <CartDrawer
@@ -356,6 +587,10 @@ export default function App() {
         isOpen={Boolean(quickViewProduct)}
         onClose={() => setQuickViewProduct(null)}
         onAddToCart={handleAddToCart}
+        onOpenDetail={(prod) => {
+          setQuickViewProduct(null)
+          navigate(`/product/${prod.id}`)
+        }}
       />
 
       {/* Authentication / Login Modal */}
@@ -365,6 +600,7 @@ export default function App() {
         user={currentUser}
         onAuthSuccess={handleAuthSuccess}
         onLogout={handleLogout}
+        onOpenAdminDashboard={() => setIsAdminView(true)}
       />
 
       {/* Checkout Modal */}

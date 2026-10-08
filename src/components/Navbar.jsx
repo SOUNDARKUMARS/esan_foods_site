@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { ShoppingBag, Search, User, Heart, Menu, X, Sparkles, ChevronDown } from 'lucide-react'
+import { ShoppingBag, Search, User, Heart, Menu, X, Sparkles, ChevronDown, Shield } from 'lucide-react'
+import esanLogo from '../assets/esan_foods_logo.png'
 
 export default function Navbar({
   cartCount,
@@ -11,42 +12,51 @@ export default function Navbar({
   onSearchChange,
   wishlistCount,
   onOpenWishlist,
+  onGoHome,
 }) {
   const [showSearch, setShowSearch] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const handleHomeClick = (e) => {
+    if (onGoHome) onGoHome()
+  }
 
   return (
     <header className="site-header">
       <div className="header-inner">
         {/* Brand Logo */}
-        <a href="#home" className="brand-logo">
-          <div className="logo-icon-wrap">
-            <span className="logo-leaf">🌿</span>
-          </div>
+        <a
+          href="#home"
+          className="brand-logo"
+          aria-label="Esan Foods Homepage"
+          onClick={handleHomeClick}
+        >
+          <img src={esanLogo} alt="Esan Foods Logo" className="brand-logo-img" />
           <div className="logo-text-wrap">
-            <span className="brand-name">Juicera</span>
-            <span className="brand-badge">Pure Organic</span>
+            <span className="brand-name">Esan Foods</span>
+            <span className="brand-badge">100% Natural & Healthy</span>
           </div>
         </a>
 
         {/* Desktop Navigation Links */}
         <nav className="desktop-nav" aria-label="Main Navigation">
-          <a href="#home" className="nav-link active">Home</a>
+          <a href="#home" className="nav-link active" onClick={handleHomeClick}>
+            Home
+          </a>
           <div className="nav-dropdown-trigger">
             <a href="#collections" className="nav-link">
               Shop <ChevronDown size={14} className="dropdown-arrow" />
             </a>
             <div className="nav-dropdown-menu">
-              <a href="#collections">All Flavors</a>
-              <a href="#collections">100% Pure Juice</a>
-              <a href="#collections">Sparkling Fruit</a>
-              <a href="#collections">Tropical & Exotic</a>
+              <a href="#collections">All Products</a>
+              <a href="#collections">Herbal Powders</a>
+              <a href="#collections">Natural Boosters</a>
               <a href="#spotlight">Featured Spotlight</a>
             </div>
           </div>
           <a href="#spotlight" className="nav-link">Product</a>
           <a href="#reviews" className="nav-link">Reviews</a>
-          <a href="#benefits" className="nav-link">Why Juicera</a>
+          <a href="#benefits" className="nav-link">Why Esan Foods</a>
           <a href="#faq" className="nav-link">FAQ</a>
         </nav>
 
@@ -134,7 +144,7 @@ export default function Navbar({
                 onClick={onOpenAuth}
               >
                 <div className={`user-avatar-dot ${user.role === 'admin' ? 'admin-dot' : ''}`}></div>
-                <span>{user.name.split(' ')[0]}</span>
+                <span className="user-pill-name">{user.name.split(' ')[0]}</span>
               </button>
             </div>
           ) : (
@@ -164,12 +174,69 @@ export default function Navbar({
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
         <div className="mobile-nav-panel animate-fade-in">
-          <a href="#home" onClick={() => setMobileMenuOpen(false)}>Home</a>
-          <a href="#collections" onClick={() => setMobileMenuOpen(false)}>Shop Collections</a>
+          {user?.role === 'admin' && (
+            <button
+              type="button"
+              className="mobile-admin-badge-btn"
+              onClick={() => {
+                onOpenAdminDashboard()
+                setMobileMenuOpen(false)
+              }}
+            >
+              <Shield size={16} className="text-emerald-400" />
+              <span>Launch Admin Console</span>
+            </button>
+          )}
+          <a
+            href="#home"
+            onClick={() => {
+              if (onGoHome) onGoHome()
+              setMobileMenuOpen(false)
+            }}
+          >
+            Home
+          </a>
+          <a
+            href="#collections"
+            onClick={() => {
+              if (onGoHome) onGoHome()
+              setMobileMenuOpen(false)
+            }}
+          >
+            Shop Collections
+          </a>
           <a href="#spotlight" onClick={() => setMobileMenuOpen(false)}>Featured Product</a>
           <a href="#reviews" onClick={() => setMobileMenuOpen(false)}>Customer Reviews</a>
           <a href="#benefits" onClick={() => setMobileMenuOpen(false)}>Why You'll Love It</a>
           <a href="#faq" onClick={() => setMobileMenuOpen(false)}>Frequently Asked Questions</a>
+
+          <div className="mobile-drawer-footer">
+            {user ? (
+              <button
+                type="button"
+                className="mobile-drawer-user-btn"
+                onClick={() => {
+                  onOpenAuth()
+                  setMobileMenuOpen(false)
+                }}
+              >
+                <User size={15} />
+                <span>Account ({user.name.split(' ')[0]})</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-pill-primary w-full flex-center-gap"
+                onClick={() => {
+                  onOpenAuth()
+                  setMobileMenuOpen(false)
+                }}
+              >
+                <User size={15} />
+                <span>Sign In / Register</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
     </header>

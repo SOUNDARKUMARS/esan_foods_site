@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
-import { Plus, Minus, Heart, Eye, ShoppingBag, Sparkles } from 'lucide-react'
+import { Plus, Minus, Heart, Eye, ShoppingBag, Sparkles, Maximize2 } from 'lucide-react'
 import { CATEGORIES } from '../data/mockData'
 
 export default function CollectionsSection({
   products,
   onAddToCart,
   onQuickView,
+  onOpenDetail,
   wishlist,
   onToggleWishlist,
   selectedCategory,
@@ -66,30 +67,20 @@ export default function CollectionsSection({
             const isWishlisted = wishlist.includes(product.id)
 
             return (
-              <div key={product.id} className="product-card">
-                {/* Top Card Badges & Actions */}
-                <div className="card-top-bar">
-                  <span className="product-badge-pill" style={{ borderColor: product.color }}>
-                    {product.badge}
-                  </span>
-                  <button
-                    type="button"
-                    className={`wishlist-heart-btn ${isWishlisted ? 'liked' : ''}`}
-                    onClick={() => onToggleWishlist(product.id)}
-                    aria-label={`Save ${product.name} to wishlist`}
-                    title="Add to Wishlist"
-                  >
-                    <Heart size={16} fill={isWishlisted ? '#ef4444' : 'none'} color={isWishlisted ? '#ef4444' : '#6b7280'} />
-                  </button>
-                </div>
-
-                {/* Product Image Stage */}
+              <div
+                key={product.id}
+                className="product-card clickable-product-card"
+                onClick={() => (onOpenDetail ? onOpenDetail(product) : onQuickView(product))}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) =>
+                  e.key === 'Enter' &&
+                  (onOpenDetail ? onOpenDetail(product) : onQuickView(product))
+                }
+              >
+                {/* Product Image Stage (Cover image with overlay badges) */}
                 <div
                   className="product-image-stage"
-                  onClick={() => onQuickView(product)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => e.key === 'Enter' && onQuickView(product)}
                   aria-label={`View details for ${product.name}`}
                 >
                   <img
@@ -98,20 +89,87 @@ export default function CollectionsSection({
                     className="product-can-img"
                     loading="lazy"
                   />
-                  <div className="quick-preview-overlay">
-                    <span className="quick-preview-btn">
-                      <Eye size={14} /> Quick View
-                    </span>
+
+                  {/* Overlaid Badges on Image */}
+                  <div className="card-image-overlays">
+                    {product.badge ? (
+                      <span
+                        className="product-badge-pill"
+                        style={{ borderColor: product.color || '#059669' }}
+                      >
+                        {product.badge}
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+
+                    <div className="card-top-action-icons">
+                      {/* Expand Button to Open as Modal */}
+                      <button
+                        type="button"
+                        className="card-expand-modal-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onQuickView(product)
+                        }}
+                        aria-label={`Open quick view modal for ${product.name}`}
+                        title="Expand as Modal"
+                      >
+                        <Maximize2 size={14} />
+                      </button>
+
+                      {/* Wishlist Heart Button */}
+                      <button
+                        type="button"
+                        className={`wishlist-heart-btn ${isWishlisted ? 'liked' : ''}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onToggleWishlist(product.id)
+                        }}
+                        aria-label={`Save ${product.name} to wishlist`}
+                        title="Add to Wishlist"
+                      >
+                        <Heart
+                          size={14}
+                          fill={isWishlisted ? '#ef4444' : 'none'}
+                          color={isWishlisted ? '#ef4444' : '#64748b'}
+                        />
+                      </button>
+                    </div>
                   </div>
+
+
                 </div>
 
                 {/* Product Info */}
                 <div className="product-info-wrap">
-                  <h3 className="product-card-name">{product.name}</h3>
-                  <div className="product-volume-text">{product.volume}</div>
+                  <div className="product-cat-vol-row">
+                    <span className="product-cat-pill">{product.category}</span>
+                    <span className="product-dot-sep">•</span>
+                    <span className="product-vol-pill">{product.volume}</span>
+                  </div>
 
-                  {/* Interactive Controls Row */}
-                  <div className="product-action-controls">
+                  <h3 className="product-card-name" title={product.name}>
+                    {product.name}
+                  </h3>
+
+                  {/* Price Row */}
+                  <div className="product-price-display-row">
+                    <span className="product-curr-price">
+                      ${Number(product.price).toFixed(2)}
+                    </span>
+                    {product.originalPrice && (
+                      <span className="product-orig-price">
+                        ${Number(product.originalPrice).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Desktop Action Controls */}
+                  <div
+                    className="product-action-controls desktop-only-controls"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {/* Stepper (- 01 +) */}
                     <div className="stepper-pill">
                       <button
@@ -142,7 +200,24 @@ export default function CollectionsSection({
                       onClick={() => handleAddToCart(product)}
                       aria-label={`Add to Cart for $${totalPrice}`}
                     >
-                      <span>Add to Cart - ${totalPrice}</span>
+                      <ShoppingBag size={14} />
+                      <span>Add • ${totalPrice}</span>
+                    </button>
+                  </div>
+
+                  {/* Mobile-Optimized 2-Column Action Bar */}
+                  <div
+                    className="product-mobile-action-bar mobile-only-controls"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="mobile-quick-add-btn"
+                      onClick={() => handleAddToCart(product)}
+                      aria-label={`Add ${product.name} to Cart`}
+                    >
+                      <ShoppingBag size={14} />
+                      <span>Add to Bag</span>
                     </button>
                   </div>
 
@@ -151,9 +226,13 @@ export default function CollectionsSection({
                     <button
                       type="button"
                       className="view-details-link-btn"
-                      onClick={() => onQuickView(product)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (onOpenDetail) onOpenDetail(product)
+                        else onQuickView(product)
+                      }}
                     >
-                      View Details
+                      View Detailed Screen →
                     </button>
                   </div>
                 </div>

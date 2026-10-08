@@ -66,13 +66,13 @@ export default function CheckoutModal({
             </div>
             <h2 className="success-title">Order Confirmed!</h2>
             <p className="success-subtitle">
-              Thank you for choosing Juicera. Your fresh organic drinks have been scheduled for carbon-neutral express delivery.
+              Thank you for choosing Esan Foods. Your authentic pure herbal foods have been scheduled for express delivery.
             </p>
 
             <div className="order-details-card">
               <div className="order-meta-row">
                 <span>Order Reference:</span>
-                <strong>#JCR-{Math.floor(100000 + Math.random() * 900000)}</strong>
+                <strong>#ESN-{Math.floor(100000 + Math.random() * 900000)}</strong>
               </div>
               <div className="order-meta-row">
                 <span>Delivery To:</span>

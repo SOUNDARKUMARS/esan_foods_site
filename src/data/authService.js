@@ -7,20 +7,13 @@ try {
   localStorage.removeItem(AUTH_STORAGE_KEY)
 } catch (e) {}
 
-// Admin Credentials
-export const ADMIN_CREDENTIALS = {
-  email: 'admin@123',
-  password: '1212',
-}
-
-// Format Supabase user into application profile
+// Format Supabase user into application profile (fallback formatter)
 export function formatUserFromSupabase(sbUser) {
   if (!sbUser) return null
   const email = (sbUser.email || '').toLowerCase()
   const isAdmin =
-    email === ADMIN_CREDENTIALS.email.toLowerCase() ||
-    email.startsWith('admin@') ||
-    sbUser.user_metadata?.role === 'admin'
+    sbUser.user_metadata?.role === 'admin' ||
+    email.startsWith('admin@')
 
   return {
     id: sbUser.id,
@@ -29,14 +22,96 @@ export function formatUserFromSupabase(sbUser) {
       (isAdmin ? 'System Administrator' : email.split('@')[0]) ||
       'Juicera Member',
     email: sbUser.email || email,
-    role: isAdmin ? 'admin' : 'user',
+    role: isAdmin ? 'admin' : (sbUser.user_metadata?.role || 'user'),
     avatar:
       sbUser.user_metadata?.avatar_url ||
       (isAdmin
         ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
         : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80'),
-    loyaltyPoints: 340,
+    phone: sbUser.user_metadata?.phone || '',
+    loyaltyPoints: 50,
     supabaseSession: true,
+  }
+}
+
+// Fetch or create profile in public.profiles table
+export async function syncUserProfile(sbUser) {
+  if (!sbUser) return null
+  const email = (sbUser.email || '').toLowerCase()
+
+  try {
+    // 1. Try to read existing profile from public.profiles
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', sbUser.id)
+      .maybeSingle()
+
+    if (profile && !error) {
+      const isAdmin =
+        profile.role === 'admin' ||
+        sbUser.user_metadata?.role === 'admin' ||
+        email.startsWith('admin@')
+
+      return {
+        id: profile.id,
+        name: profile.full_name || sbUser.user_metadata?.full_name || email.split('@')[0] || 'Juicera Member',
+        email: profile.email || email,
+        role: isAdmin ? 'admin' : (profile.role || 'user'),
+        avatar:
+          profile.avatar_url ||
+          sbUser.user_metadata?.avatar_url ||
+          (isAdmin
+            ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
+            : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80'),
+        phone: profile.phone || '',
+        loyaltyPoints: profile.loyalty_points ?? 50,
+        supabaseSession: true,
+      }
+    }
+
+    // 2. Profile row doesn't exist yet: insert into public.profiles
+    const isNewAdmin =
+      sbUser.user_metadata?.role === 'admin' || email.startsWith('admin@')
+
+    const newProfile = {
+      id: sbUser.id,
+      email: email,
+      full_name:
+        sbUser.user_metadata?.full_name ||
+        (isNewAdmin ? 'System Administrator' : email.split('@')[0]) ||
+        'Juicera Member',
+      avatar_url:
+        sbUser.user_metadata?.avatar_url ||
+        (isNewAdmin
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
+          : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80'),
+      role: isNewAdmin ? 'admin' : 'user',
+      loyalty_points: 50,
+    }
+
+    const { data: inserted } = await supabase
+      .from('profiles')
+      .upsert(newProfile, { onConflict: 'id' })
+      .select('*')
+      .single()
+
+    const record = inserted || newProfile
+    const isAdmin = record.role === 'admin'
+
+    return {
+      id: record.id,
+      name: record.full_name,
+      email: record.email,
+      role: isAdmin ? 'admin' : record.role,
+      avatar: record.avatar_url,
+      phone: record.phone || '',
+      loyaltyPoints: record.loyalty_points ?? 50,
+      supabaseSession: true,
+    }
+  } catch (err) {
+    console.warn('Unable to sync profile from database, using session fallback:', err)
+    return formatUserFromSupabase(sbUser)
   }
 }
 
@@ -48,59 +123,34 @@ export async function clearSession() {
     // Ignore storage errors
   }
   try {
-    await supabase.auth.signOut()
+    const { data } = await supabase.auth.getSession()
+    if (data?.session) {
+      await supabase.auth.signOut()
+    }
   } catch (e) {
     // Ignore sign out errors
   }
 }
 
 // Strictly verify session against Supabase
-// If NO session is found from Supabase, it cleans up and returns null
+// If NO session is found from Supabase, safely returns null without triggering cascade sign-out
 export async function verifyCurrentSupabaseSession() {
   try {
     const { data, error } = await supabase.auth.getSession()
     if (error || !data || !data.session) {
-      // No session found from Supabase -> log out completely
-      await clearSession()
       return null
     }
 
-    // Valid Supabase session found
-    const appUser = formatUserFromSupabase(data.session.user)
+    // Valid Supabase session found -> fetch/sync user profile from profiles table
+    const appUser = await syncUserProfile(data.session.user)
     return {
       user: appUser,
       session: data.session,
-      isAdmin: appUser.role === 'admin',
+      isAdmin: appUser?.role === 'admin',
     }
   } catch (err) {
-    await clearSession()
     return null
   }
-}
-
-// Check admin credentials
-export function checkAdminCredentials(email, password) {
-  const cleanEmail = (email || '').trim().toLowerCase()
-  const cleanPass = (password || '').trim()
-
-  if (
-    cleanEmail === ADMIN_CREDENTIALS.email.toLowerCase() &&
-    cleanPass === ADMIN_CREDENTIALS.password
-  ) {
-    const adminUser = {
-      id: 'usr_admin_001',
-      name: 'System Administrator',
-      email: ADMIN_CREDENTIALS.email,
-      role: 'admin',
-      avatar:
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-      badge: 'Super Admin',
-      department: 'Executive Operations',
-      temporarySession: true,
-    }
-    return { success: true, isAdmin: true, user: adminUser }
-  }
-  return { success: false }
 }
 
 // -------------------------------------------------------------
@@ -112,15 +162,6 @@ export async function sendSupabaseEmailOtp(email) {
   const cleanEmail = (email || '').trim()
   if (!cleanEmail) {
     return { success: false, error: 'Email address is required.' }
-  }
-
-  // If user entered admin@123 in the OTP field, guide them
-  if (cleanEmail.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()) {
-    return {
-      success: false,
-      isAdminEmail: true,
-      error: 'admin@123 uses direct administrative security credentials (pass: 1212).',
-    }
   }
 
   try {
@@ -168,12 +209,12 @@ export async function verifySupabaseEmailOtp(email, token) {
       return { success: false, error: error.message }
     }
 
-    const appUser = formatUserFromSupabase(data.user)
+    const appUser = await syncUserProfile(data.user)
     return {
       success: true,
       user: appUser,
       session: data.session,
-      isAdmin: appUser.role === 'admin',
+      isAdmin: appUser?.role === 'admin',
     }
   } catch (err) {
     return {

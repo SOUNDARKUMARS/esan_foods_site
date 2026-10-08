@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   LayoutDashboard,
   Package,
@@ -24,8 +24,18 @@ import {
   Eye,
   RefreshCw,
   Sparkles,
+  Menu,
+  X,
+  Sun,
+  Moon,
+  ArrowLeft,
+  Check,
+  Image as ImageIcon,
+  Flame,
+  ChevronRight,
 } from 'lucide-react'
 import { getAdminOrders, updateOrderStatus } from '../data/adminData'
+import esanLogo from '../assets/esan_foods_logo.png'
 
 export default function AdminDashboard({
   adminUser,
@@ -37,31 +47,75 @@ export default function AdminDashboard({
   onDeleteProduct,
 }) {
   const [activeTab, setActiveTab] = useState('overview') // 'overview' | 'products' | 'orders' | 'customers' | 'settings'
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('juicera_admin_theme') || 'light'
+    } catch {
+      return 'light'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('juicera_admin_theme', theme)
+    } catch {}
+    const rootEl = document.querySelector('.app-admin-root')
+    if (rootEl) {
+      rootEl.classList.remove('admin-theme-dark', 'admin-theme-light')
+      rootEl.classList.add(theme === 'dark' ? 'admin-theme-dark' : 'admin-theme-light')
+    }
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
+  }
+
+  // Smart sticky header: visible on load & scroll-up; hides when scrolling deep down
+  const [headerVisible, setHeaderVisible] = useState(true)
+
+  useEffect(() => {
+    let lastY = window.scrollY
+    let ticking = false
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentY = window.scrollY
+          const diff = currentY - lastY
+
+          if (currentY <= 40) {
+            setHeaderVisible(true)
+          } else if (diff < -4) {
+            // Scrolled up even slightly -> quickly bring header back!
+            setHeaderVisible(true)
+          } else if (diff > 10 && currentY > 100) {
+            // Scrolling down -> hide to maximize reading view
+            setHeaderVisible(false)
+          }
+
+          lastY = currentY
+          ticking = false
+        })
+        ticking = true
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
   const [orders, setOrders] = useState(getAdminOrders())
   const [orderFilter, setOrderFilter] = useState('All')
   const [productSearch, setProductSearch] = useState('')
-  const [editingProduct, setEditingProduct] = useState(null)
-  const [isAddProductOpen, setIsAddProductOpen] = useState(false)
+  const [editorMode, setEditorMode] = useState(null) // null | 'create' | 'edit'
+  const [editorProduct, setEditorProduct] = useState(null)
   const [adminNotification, setAdminNotification] = useState('')
 
-  // Form state for creating a new drink product
-  const [newProd, setNewProd] = useState({
-    name: '',
-    subtitle: '',
-    category: '100% Pure Juice',
-    volume: '330ml',
-    price: 3.99,
-    badge: 'Organic',
-    color: '#059669',
-    calories: '90 kcal',
-    sugar: '10g',
-    description: '',
-  })
-
-  // Calculations for overview cards
+  // Overview metrics calculations
   const totalRevenue = orders
     .filter((o) => o.status !== 'Cancelled')
-    .reduce((sum, o) => sum + o.total, 0)
+    .reduce((sum, o) => sum + (Number(o.total) || 0), 0)
   const totalOrdersCount = orders.length
   const deliveredOrdersCount = orders.filter((o) => o.status === 'Delivered').length
   const pendingOrdersCount = orders.filter(
@@ -75,58 +129,118 @@ export default function AdminDashboard({
     setTimeout(() => setAdminNotification(''), 3000)
   }
 
-  const handleSaveEditProduct = (e) => {
-    e.preventDefault()
-    if (!editingProduct) return
-    onUpdateProduct(editingProduct)
-    setEditingProduct(null)
-    setAdminNotification(`Product ${editingProduct.name} updated!`)
-    setTimeout(() => setAdminNotification(''), 3000)
-  }
-
-  const handleCreateProduct = (e) => {
-    e.preventDefault()
-    if (!newProd.name) return
-    const created = {
-      id: 'prod-' + Date.now(),
-      name: newProd.name,
-      subtitle: newProd.subtitle || 'Fresh Organic Blend',
-      volume: newProd.volume || '330ml',
-      price: parseFloat(newProd.price) || 3.99,
-      category: newProd.category,
-      rating: 5.0,
-      reviewsCount: 1,
-      badge: newProd.badge || 'New',
-      image: products[0]?.image || '',
-      color: newProd.color || '#10b981',
-      bgSoft: '#f0fdf4',
-      description: newProd.description || 'Delicious 100% natural beverage.',
-      nutrition: {
-        calories: newProd.calories || '95 kcal',
-        sugar: newProd.sugar || '10g',
-        carbs: '20g',
-        vitaminC: '100% DV',
-        organic: '100% Certified',
-      },
-      tastingNotes: ['Crisp', 'Refreshing'],
-      ingredients: ['Organic Fruit', 'Filtered Water'],
-    }
-    onAddProduct(created)
-    setIsAddProductOpen(false)
-    setNewProd({
+  const handleOpenCreateProduct = () => {
+    setEditorProduct({
       name: '',
-      subtitle: '',
+      subtitle: 'Fresh Organic Blend',
       category: '100% Pure Juice',
       volume: '330ml',
       price: 3.99,
+      originalPrice: '',
       badge: 'Organic',
       color: '#059669',
+      image: '',
+      galleryImages: [],
+      galleryImagesText: '',
+      videoUrl: '',
       calories: '90 kcal',
       sugar: '10g',
+      carbs: '20g',
       description: '',
     })
-    setAdminNotification(`Created new product: ${created.name}`)
-    setTimeout(() => setAdminNotification(''), 3000)
+    setEditorMode('create')
+    setActiveTab('products')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleOpenEditProduct = (p) => {
+    const galleryArr = Array.isArray(p.galleryImages)
+      ? p.galleryImages
+      : (p.image ? [p.image] : [])
+    setEditorProduct({
+      ...p,
+      price: p.price ?? 3.99,
+      originalPrice: p.originalPrice ?? '',
+      badge: p.badge || 'Organic',
+      volume: p.volume || '330ml',
+      color: p.color || '#059669',
+      galleryImages: galleryArr,
+      galleryImagesText: galleryArr.join('\n'),
+      calories: p.nutrition?.calories || p.calories || '90 kcal',
+      sugar: p.nutrition?.sugar || p.sugar || '10g',
+      carbs: p.nutrition?.carbs || p.carbs || '20g',
+      description: p.description || '',
+    })
+    setEditorMode('edit')
+    setActiveTab('products')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const handleCancelEditor = () => {
+    setEditorMode(null)
+    setEditorProduct(null)
+  }
+
+  const handleSaveProduct = (e) => {
+    if (e) e.preventDefault()
+    if (!editorProduct || !editorProduct.name.trim()) {
+      alert('Please enter a drink flavor name.')
+      return
+    }
+
+    const galleryList = editorProduct.galleryImagesText
+      ? editorProduct.galleryImagesText.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean)
+      : (Array.isArray(editorProduct.galleryImages) && editorProduct.galleryImages.length > 0
+          ? editorProduct.galleryImages
+          : (editorProduct.image ? [editorProduct.image] : []))
+
+    const finalImage = editorProduct.image || galleryList[0] || (products[0]?.image || '')
+
+    if (editorMode === 'edit') {
+      const updated = {
+        ...editorProduct,
+        price: parseFloat(editorProduct.price) || 0,
+        originalPrice: editorProduct.originalPrice ? parseFloat(editorProduct.originalPrice) : undefined,
+        image: finalImage,
+        galleryImages: galleryList.length > 0 ? galleryList : [finalImage],
+        nutrition: {
+          ...(editorProduct.nutrition || {}),
+          calories: editorProduct.calories || editorProduct.nutrition?.calories || '90 kcal',
+          sugar: editorProduct.sugar || editorProduct.nutrition?.sugar || '10g',
+          carbs: editorProduct.carbs || editorProduct.nutrition?.carbs || '20g',
+        },
+      }
+      onUpdateProduct(updated)
+      setAdminNotification(`Flavor "${updated.name}" updated successfully! ✨`)
+    } else {
+      const idSlug = editorProduct.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || ('prod-' + Date.now())
+      const created = {
+        ...editorProduct,
+        id: idSlug,
+        price: parseFloat(editorProduct.price) || 3.99,
+        originalPrice: editorProduct.originalPrice ? parseFloat(editorProduct.originalPrice) : undefined,
+        rating: 5.0,
+        reviewsCount: 1,
+        image: finalImage,
+        galleryImages: galleryList.length > 0 ? galleryList : [finalImage],
+        bgSoft: '#f0fdf4',
+        nutrition: {
+          calories: editorProduct.calories || '90 kcal',
+          sugar: editorProduct.sugar || '10g',
+          carbs: editorProduct.carbs || '20g',
+          vitaminC: '100% DV',
+          organic: '100% Certified',
+        },
+        tastingNotes: ['Crisp', 'Refreshing'],
+        ingredients: ['Organic Fruit Blend', 'Pure Filtered Water'],
+      }
+      onAddProduct(created)
+      setAdminNotification(`New flavor "${created.name}" created and published! 🚀`)
+    }
+
+    setEditorMode(null)
+    setEditorProduct(null)
+    setTimeout(() => setAdminNotification(''), 3500)
   }
 
   // Filtered orders
@@ -143,63 +257,230 @@ export default function AdminDashboard({
   )
 
   return (
-    <div className="admin-layout-root animate-fade-in">
-      {/* Sidebar Navigation */}
-      <aside className="admin-sidebar">
-        <div className="admin-sidebar-header">
-          <div className="admin-brand-icon">
-            <span>🌿</span>
+    <div className={`admin-layout-root animate-fade-in ${theme === 'dark' ? 'admin-theme-dark' : 'admin-theme-light'}`}>
+      {/* Mobile Smart Sticky Header (Visible on screens <= 1024px) */}
+      <header className={`admin-mobile-header-wrapper ${headerVisible ? 'header-visible' : 'header-hidden'}`}>
+        <div className="admin-mobile-header">
+          {editorMode && activeTab === 'products' ? (
+            <div className="admin-mobile-editor-nav-bar">
+              <button
+                type="button"
+                className="admin-mobile-editor-back-btn"
+                onClick={handleCancelEditor}
+              >
+                <ArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <span className="admin-mobile-editor-title">
+                {editorMode === 'create' ? 'Add Flavor' : 'Edit Flavor'}
+              </span>
+              <button
+                type="button"
+                className="btn-pill-primary admin-mobile-editor-save-btn"
+                onClick={handleSaveProduct}
+              >
+                <Check size={14} />
+                <span>Save</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="admin-mobile-brand">
+                <img src={esanLogo} alt="Esan Foods" className="admin-brand-icon-img" />
+                <div className="admin-brand-titles">
+                  <h2 className="admin-brand-name">Esan Foods Admin</h2>
+                  <span className="admin-secure-tag">
+                    <Shield size={11} /> Secured
+                  </span>
+                </div>
+              </div>
+
+              <div className="admin-mobile-header-actions">
+                <button
+                  type="button"
+                  className="admin-mobile-theme-btn"
+                  onClick={toggleTheme}
+                  title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                  aria-label="Toggle admin color theme"
+                >
+                  {theme === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
+                </button>
+                <button
+                  type="button"
+                  className="admin-mobile-store-btn"
+                  onClick={onSwitchToStore}
+                  title="View Public Store"
+                >
+                  <ExternalLink size={15} />
+                  <span className="hide-on-mobile-xs">Store</span>
+                </button>
+                <button
+                  type="button"
+                  className="admin-mobile-menu-btn"
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  aria-label="Toggle admin navigation menu"
+                >
+                  {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Mobile Horizontal Quick-Tabs Pill Bar (Pinned directly below brand bar) */}
+        {!editorMode && (
+          <div className="admin-mobile-quick-nav">
+            <button
+              type="button"
+              className={`mobile-tab-pill ${activeTab === 'overview' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('overview')
+                setEditorMode(null)
+              }}
+            >
+              <LayoutDashboard size={14} />
+              <span>Overview</span>
+            </button>
+            <button
+              type="button"
+              className={`mobile-tab-pill ${activeTab === 'products' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('products')
+                setEditorMode(null)
+              }}
+            >
+              <Boxes size={14} />
+              <span>Products ({products.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`mobile-tab-pill ${activeTab === 'orders' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('orders')
+                setEditorMode(null)
+              }}
+            >
+              <ShoppingBag size={14} />
+              <span>Orders ({orders.length})</span>
+            </button>
+            <button
+              type="button"
+              className={`mobile-tab-pill ${activeTab === 'customers' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('customers')
+                setEditorMode(null)
+              }}
+            >
+              <Users size={14} />
+              <span>Customers</span>
+            </button>
+            <button
+              type="button"
+              className={`mobile-tab-pill ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('settings')
+                setEditorMode(null)
+              }}
+            >
+              <Settings size={14} />
+              <span>Settings</span>
+            </button>
           </div>
+        )}
+      </header>
+
+      {/* Backdrop overlay for mobile drawer */}
+      {mobileMenuOpen && (
+        <div
+          className="admin-mobile-backdrop animate-fade-in"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar Navigation (Slide-out drawer on mobile, sticky bar on desktop) */}
+      <aside className={`admin-sidebar ${mobileMenuOpen ? 'mobile-drawer-open' : ''}`}>
+        <div className="admin-sidebar-header">
+          <img src={esanLogo} alt="Esan Foods" className="admin-brand-icon-img" />
           <div className="admin-brand-titles">
-            <h2 className="admin-brand-name">Juicera Admin</h2>
+            <h2 className="admin-brand-name">Esan Foods Admin</h2>
             <span className="admin-secure-tag">
               <Shield size={11} /> Secured Console
             </span>
           </div>
+          {/* Close button inside mobile drawer */}
+          <button
+            type="button"
+            className="admin-sidebar-close-btn"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="admin-sidebar-nav">
           <button
             type="button"
             className={`admin-nav-item ${activeTab === 'overview' ? 'active' : ''}`}
-            onClick={() => setActiveTab('overview')}
+            onClick={() => {
+              setActiveTab('overview')
+              setEditorMode(null)
+              setMobileMenuOpen(false)
+            }}
           >
             <LayoutDashboard size={18} />
-            <span>Overview & Metrics</span>
+            <span>Overview</span>
           </button>
           <button
             type="button"
             className={`admin-nav-item ${activeTab === 'products' ? 'active' : ''}`}
-            onClick={() => setActiveTab('products')}
+            onClick={() => {
+              setActiveTab('products')
+              setEditorMode(null)
+              setMobileMenuOpen(false)
+            }}
           >
             <Boxes size={18} />
-            <span>Inventory & Products</span>
+            <span>Products</span>
             <span className="admin-badge-count">{products.length}</span>
           </button>
           <button
             type="button"
             className={`admin-nav-item ${activeTab === 'orders' ? 'active' : ''}`}
-            onClick={() => setActiveTab('orders')}
+            onClick={() => {
+              setActiveTab('orders')
+              setEditorMode(null)
+              setMobileMenuOpen(false)
+            }}
           >
             <ShoppingBag size={18} />
-            <span>Orders Management</span>
+            <span>Orders</span>
             <span className="admin-badge-count">{orders.length}</span>
           </button>
           <button
             type="button"
             className={`admin-nav-item ${activeTab === 'customers' ? 'active' : ''}`}
-            onClick={() => setActiveTab('customers')}
+            onClick={() => {
+              setActiveTab('customers')
+              setEditorMode(null)
+              setMobileMenuOpen(false)
+            }}
           >
             <Users size={18} />
-            <span>Customers & VIPs</span>
+            <span>Customers</span>
           </button>
           <button
             type="button"
             className={`admin-nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-            onClick={() => setActiveTab('settings')}
+            onClick={() => {
+              setActiveTab('settings')
+              setEditorMode(null)
+              setMobileMenuOpen(false)
+            }}
           >
             <Settings size={18} />
-            <span>Security & Store Config</span>
+            <span>Settings</span>
           </button>
         </nav>
 
@@ -207,8 +488,26 @@ export default function AdminDashboard({
         <div className="admin-sidebar-footer">
           <button
             type="button"
+            className="admin-theme-switch-row"
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          >
+            <div className="admin-theme-switch-label">
+              {theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
+              <span>{theme === 'dark' ? 'Dark Theme' : 'Light Theme'}</span>
+            </div>
+            <div className={`admin-theme-toggle-slider ${theme === 'dark' ? 'active' : ''}`}>
+              <div className="admin-theme-toggle-knob" />
+            </div>
+          </button>
+
+          <button
+            type="button"
             className="admin-switch-store-btn"
-            onClick={onSwitchToStore}
+            onClick={() => {
+              onSwitchToStore()
+              setMobileMenuOpen(false)
+            }}
             title="View live consumer storefront"
           >
             <ExternalLink size={16} />
@@ -223,12 +522,15 @@ export default function AdminDashboard({
             />
             <div className="admin-profile-meta">
               <span className="admin-profile-name">{adminUser?.name || 'Administrator'}</span>
-              <span className="admin-profile-email">{adminUser?.email || 'admin@123'}</span>
+              <span className="admin-profile-email">{adminUser?.email || 'admin@esanfoods.com'}</span>
             </div>
             <button
               type="button"
               className="admin-logout-icon-btn"
-              onClick={onLogout}
+              onClick={() => {
+                onLogout()
+                setMobileMenuOpen(false)
+              }}
               title="Secure Sign Out"
             >
               <LogOut size={16} />
@@ -239,18 +541,29 @@ export default function AdminDashboard({
 
       {/* Main Content Area */}
       <main className="admin-main-viewport">
+
         {/* Top Header Bar */}
         <header className="admin-topbar">
           <div className="admin-topbar-left">
             <h1 className="admin-page-title">
-              {activeTab === 'overview' && 'Executive Dashboard'}
-              {activeTab === 'products' && 'Product Inventory & Pricing'}
-              {activeTab === 'orders' && 'Real-Time Orders & Fulfillment'}
-              {activeTab === 'customers' && 'Customer CRM & Member Club'}
-              {activeTab === 'settings' && 'Admin Credentials & Security'}
+              {editorMode && activeTab === 'products'
+                ? editorMode === 'create'
+                  ? 'Add New Beverage Flavor'
+                  : `Edit Flavor: ${editorProduct?.name || ''}`
+                : (activeTab === 'overview' && 'Overview') ||
+                  (activeTab === 'products' && 'Products') ||
+                  (activeTab === 'orders' && 'Orders') ||
+                  (activeTab === 'customers' && 'Customers') ||
+                  (activeTab === 'settings' && 'Settings')}
             </h1>
             <p className="admin-page-sub">
-              Logged in with verified administrator credentials: <strong>{adminUser?.email}</strong>
+              {editorMode && activeTab === 'products' ? (
+                'Configure drink recipe, pricing, media assets, and nutrition details'
+              ) : (
+                <>
+                  Logged in with verified administrator credentials: <strong>{adminUser?.email}</strong>
+                </>
+              )}
             </p>
           </div>
 
@@ -261,6 +574,35 @@ export default function AdminDashboard({
                 <span>{adminNotification}</span>
               </div>
             )}
+            {editorMode && activeTab === 'products' && (
+              <div className="admin-topbar-editor-pills">
+                <button
+                  type="button"
+                  className="admin-editor-topbar-cancel"
+                  onClick={handleCancelEditor}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back to List</span>
+                </button>
+                <button
+                  type="button"
+                  className="admin-editor-topbar-save"
+                  onClick={handleSaveProduct}
+                >
+                  <Check size={14} />
+                  <span>{editorMode === 'create' ? 'Publish Flavor' : 'Save Changes'}</span>
+                </button>
+              </div>
+            )}
+            <button
+              type="button"
+              className="admin-theme-toggle-btn"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+            </button>
             <button
               type="button"
               className="admin-store-link-pill"
@@ -349,7 +691,7 @@ export default function AdminDashboard({
                   </button>
                 </div>
                 <div className="admin-table-responsive">
-                  <table className="admin-table">
+                  <table className="admin-table admin-table-recent-orders">
                     <thead>
                       <tr>
                         <th>Order ID</th>
@@ -394,7 +736,7 @@ export default function AdminDashboard({
                 </div>
               </div>
 
-              {/* Best Selling Products Mini Preview */}
+              {/* Best Selling Products Portfolio Table */}
               <div className="admin-section-box">
                 <div className="section-box-header">
                   <h3 className="section-box-title">Beverage Portfolio</h3>
@@ -406,19 +748,51 @@ export default function AdminDashboard({
                     Manage Inventory →
                   </button>
                 </div>
-                <div className="admin-catalog-mini-list">
-                  {products.slice(0, 5).map((p) => (
-                    <div key={p.id} className="catalog-mini-row">
-                      <img src={p.image} alt={p.name} className="catalog-mini-img" />
-                      <div className="catalog-mini-info">
-                        <h4 className="catalog-mini-name">{p.name}</h4>
-                        <span className="catalog-mini-cat">{p.category} · {p.volume}</span>
-                      </div>
-                      <div className="catalog-mini-price">
-                        ${p.price.toFixed(2)}
-                      </div>
-                    </div>
-                  ))}
+                <div className="admin-table-responsive">
+                  <table className="admin-table admin-portfolio-table">
+                    <thead>
+                      <tr>
+                        <th>Image</th>
+                        <th>Drink Name</th>
+                        <th>Category</th>
+                        <th>Volume</th>
+                        <th>Price</th>
+                        <th>Badge</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.slice(0, 5).map((p) => (
+                        <tr key={p.id}>
+                          <td>
+                            <img src={p.image} alt="" className="table-product-thumb" />
+                          </td>
+                          <td>
+                            <div className="product-table-name-group">
+                              <strong>{p.name}</strong>
+                              <span className="product-table-sub">{p.subtitle}</span>
+                            </div>
+                          </td>
+                          <td>{p.category}</td>
+                          <td>{p.volume}</td>
+                          <td><strong>${(Number(p.price) || 0).toFixed(2)}</strong></td>
+                          <td>
+                            <span className="admin-badge-tag">{p.badge}</span>
+                          </td>
+                          <td>
+                            <button
+                              type="button"
+                              className="admin-action-icon-btn"
+                              onClick={() => handleOpenEditProduct(p)}
+                              title="Edit product"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -428,298 +802,622 @@ export default function AdminDashboard({
         {/* Tab 2: PRODUCTS & INVENTORY */}
         {activeTab === 'products' && (
           <div className="admin-tab-content animate-fade-in">
-            <div className="admin-action-bar">
-              <div className="admin-search-input-wrap">
-                <Search size={16} />
-                <input
-                  type="text"
-                  placeholder="Search products by title or category..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                />
-              </div>
-
-              <button
-                type="button"
-                className="btn-pill-primary admin-primary-btn"
-                onClick={() => setIsAddProductOpen(true)}
-              >
-                <Plus size={16} />
-                <span>Add New Flavor</span>
-              </button>
-            </div>
-
-            {/* Add Product Modal */}
-            {isAddProductOpen && (
-              <div className="modal-overlay animate-fade-in" onClick={() => setIsAddProductOpen(false)}>
-                <div className="modal-panel admin-modal-panel" onClick={(e) => e.stopPropagation()}>
-                  <div className="admin-modal-header">
-                    <h3>Add New Drink Flavor</h3>
+            {editorMode && editorProduct ? (
+              /* Dedicated Full-Screen Product Editor UI */
+              <div className="admin-editor-screen animate-fade-in">
+                {/* Editor Top Navigation Bar */}
+                <div className="admin-editor-nav-bar">
+                  <div className="admin-editor-nav-left">
                     <button
                       type="button"
-                      className="modal-close-btn"
-                      onClick={() => setIsAddProductOpen(false)}
+                      className="admin-editor-back-btn"
+                      onClick={handleCancelEditor}
                     >
-                      ✕
+                      <ArrowLeft size={16} />
+                      <span>Back to All Flavors</span>
                     </button>
+                    <div className="admin-editor-heading-wrap">
+                      <div className="admin-editor-breadcrumbs">
+                        <span>Products</span>
+                        <ChevronRight size={13} />
+                        <span className="current">
+                          {editorMode === 'create' ? 'Create New Flavor' : (editorProduct.name || 'Edit Flavor')}
+                        </span>
+                      </div>
+                      <h2 className="admin-editor-title">
+                        {editorMode === 'create' ? 'Create New Beverage Flavor' : `Editing: ${editorProduct.name}`}
+                      </h2>
+                    </div>
                   </div>
-                  <form onSubmit={handleCreateProduct} className="admin-product-form">
-                    <div className="form-row">
-                      <div className="form-field">
-                        <label>Flavor Name</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Sparkling Yuzu Lime"
-                          value={newProd.name}
-                          onChange={(e) => setNewProd({ ...newProd, name: e.target.value })}
-                          required
-                        />
-                      </div>
-                      <div className="form-field">
-                        <label>Price ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="3.99"
-                          value={newProd.price}
-                          onChange={(e) => setNewProd({ ...newProd, price: e.target.value })}
-                          required
-                        />
-                      </div>
-                    </div>
 
-                    <div className="form-row">
-                      <div className="form-field">
-                        <label>Category</label>
-                        <select
-                          value={newProd.category}
-                          onChange={(e) => setNewProd({ ...newProd, category: e.target.value })}
-                        >
-                          <option value="100% Pure Juice">100% Pure Juice</option>
-                          <option value="Sparkling Fruit">Sparkling Fruit</option>
-                          <option value="Tropical & Exotic">Tropical & Exotic</option>
-                          <option value="Hydration Boost">Hydration Boost</option>
-                        </select>
-                      </div>
-                      <div className="form-field">
-                        <label>Badge / Tag</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. New Release"
-                          value={newProd.badge}
-                          onChange={(e) => setNewProd({ ...newProd, badge: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-row">
-                      <div className="form-field">
-                        <label>Calories</label>
-                        <input
-                          type="text"
-                          placeholder="85 kcal"
-                          value={newProd.calories}
-                          onChange={(e) => setNewProd({ ...newProd, calories: e.target.value })}
-                        />
-                      </div>
-                      <div className="form-field">
-                        <label>Natural Sugar</label>
-                        <input
-                          type="text"
-                          placeholder="11g"
-                          value={newProd.sugar}
-                          onChange={(e) => setNewProd({ ...newProd, sugar: e.target.value })}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-field">
-                      <label>Flavor Description</label>
-                      <textarea
-                        rows="3"
-                        placeholder="Crafted with organic ingredients..."
-                        value={newProd.description}
-                        onChange={(e) => setNewProd({ ...newProd, description: e.target.value })}
-                      />
-                    </div>
-
-                    <div className="admin-form-actions">
-                      <button
-                        type="button"
-                        className="btn-pill-outline"
-                        onClick={() => setIsAddProductOpen(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button type="submit" className="btn-pill-primary">
-                        Save Product
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* Edit Product Modal */}
-            {editingProduct && (
-              <div className="modal-overlay animate-fade-in" onClick={() => setEditingProduct(null)}>
-                <div className="modal-panel admin-modal-panel" onClick={(e) => e.stopPropagation()}>
-                  <div className="admin-modal-header">
-                    <h3>Edit {editingProduct.name}</h3>
+                  <div className="admin-editor-nav-actions">
                     <button
                       type="button"
-                      className="modal-close-btn"
-                      onClick={() => setEditingProduct(null)}
+                      className="btn-pill-outline admin-editor-cancel-btn"
+                      onClick={handleCancelEditor}
                     >
-                      ✕
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-pill-primary admin-editor-save-btn"
+                      onClick={handleSaveProduct}
+                    >
+                      <Check size={16} />
+                      <span>{editorMode === 'create' ? 'Publish Flavor' : 'Save Changes'}</span>
                     </button>
                   </div>
-                  <form onSubmit={handleSaveEditProduct} className="admin-product-form">
-                    <div className="form-row">
-                      <div className="form-field">
-                        <label>Flavor Name</label>
-                        <input
-                          type="text"
-                          value={editingProduct.name}
-                          onChange={(e) =>
-                            setEditingProduct({ ...editingProduct, name: e.target.value })
-                          }
-                          required
-                        />
-                      </div>
-                      <div className="form-field">
-                        <label>Price ($)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={editingProduct.price}
-                          onChange={(e) =>
-                            setEditingProduct({
-                              ...editingProduct,
-                              price: parseFloat(e.target.value) || 0,
-                            })
-                          }
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-row">
-                      <div className="form-field">
-                        <label>Badge</label>
-                        <input
-                          type="text"
-                          value={editingProduct.badge}
-                          onChange={(e) =>
-                            setEditingProduct({ ...editingProduct, badge: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="form-field">
-                        <label>Volume</label>
-                        <input
-                          type="text"
-                          value={editingProduct.volume}
-                          onChange={(e) =>
-                            setEditingProduct({ ...editingProduct, volume: e.target.value })
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    <div className="form-field">
-                      <label>Description</label>
-                      <textarea
-                        rows="3"
-                        value={editingProduct.description}
-                        onChange={(e) =>
-                          setEditingProduct({ ...editingProduct, description: e.target.value })
-                        }
-                      />
-                    </div>
-
-                    <div className="admin-form-actions">
-                      <button
-                        type="button"
-                        className="btn-pill-outline"
-                        onClick={() => setEditingProduct(null)}
-                      >
-                        Cancel
-                      </button>
-                      <button type="submit" className="btn-pill-primary">
-                        Update Product
-                      </button>
-                    </div>
-                  </form>
                 </div>
-              </div>
-            )}
 
-            {/* Products Table */}
-            <div className="admin-section-box">
-              <div className="admin-table-responsive">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Image</th>
-                      <th>Drink Name</th>
-                      <th>Category</th>
-                      <th>Size</th>
-                      <th>Price</th>
-                      <th>Badge</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProductsList.map((p) => (
-                      <tr key={p.id}>
-                        <td>
-                          <img src={p.image} alt="" className="table-product-thumb" />
-                        </td>
-                        <td>
-                          <div className="product-table-name-group">
-                            <strong>{p.name}</strong>
-                            <span className="product-table-sub">{p.subtitle}</span>
+                {/* 2-Column Responsive Editor Workspace */}
+                <div className="admin-editor-workspace">
+                  {/* Left Column: Form Cards */}
+                  <div className="admin-editor-main-col">
+                    {/* 1. Flavor Identity */}
+                    <div className="admin-editor-card">
+                      <div className="admin-editor-card-header">
+                        <div className="admin-editor-card-icon">
+                          <Sparkles size={18} />
+                        </div>
+                        <div>
+                          <h3>Flavor Identity & Branding</h3>
+                          <p>Define product naming, category classification, and packaging badges</p>
+                        </div>
+                      </div>
+
+                      <div className="admin-editor-card-body">
+                        <div className="editor-form-row">
+                          <div className="editor-form-field flex-2">
+                            <label>Flavor Name *</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Sparkling Yuzu Lime"
+                              value={editorProduct.name}
+                              onChange={(e) =>
+                                setEditorProduct({ ...editorProduct, name: e.target.value })
+                              }
+                              required
+                            />
                           </div>
-                        </td>
-                        <td>{p.category}</td>
-                        <td>{p.volume}</td>
-                        <td><strong>${p.price.toFixed(2)}</strong></td>
-                        <td>
-                          <span className="admin-badge-tag">{p.badge}</span>
-                        </td>
-                        <td>
-                          <div className="admin-row-actions">
-                            <button
-                              type="button"
-                              className="admin-action-icon-btn"
-                              onClick={() => setEditingProduct(p)}
-                              title="Edit product"
+                          <div className="editor-form-field flex-1">
+                            <label>Category</label>
+                            <select
+                              value={editorProduct.category}
+                              onChange={(e) =>
+                                setEditorProduct({ ...editorProduct, category: e.target.value })
+                              }
                             >
-                              <Edit2 size={15} />
-                            </button>
-                            <button
-                              type="button"
-                              className="admin-action-icon-btn delete"
-                              onClick={() => {
-                                if (window.confirm(`Delete ${p.name}?`)) {
-                                  onDeleteProduct(p.id)
-                                  setAdminNotification(`Deleted ${p.name}`)
-                                  setTimeout(() => setAdminNotification(''), 3000)
+                              <option value="100% Pure Juice">100% Pure Juice</option>
+                              <option value="Sparkling Fruit">Sparkling Fruit</option>
+                              <option value="Tropical & Exotic">Tropical & Exotic</option>
+                              <option value="Hydration Boost">Hydration Boost</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="editor-form-row">
+                          <div className="editor-form-field flex-2">
+                            <label>Tagline / Subtitle</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 100% Cold-Pressed Japanese Citrus"
+                              value={editorProduct.subtitle}
+                              onChange={(e) =>
+                                setEditorProduct({ ...editorProduct, subtitle: e.target.value })
+                              }
+                            />
+                          </div>
+                          <div className="editor-form-field flex-1">
+                            <label>Badge / Label</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Organic, Best Seller, New"
+                              value={editorProduct.badge}
+                              onChange={(e) =>
+                                setEditorProduct({ ...editorProduct, badge: e.target.value })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div className="editor-form-row">
+                          <div className="editor-form-field flex-1">
+                            <label>Volume / Size</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 330ml"
+                              value={editorProduct.volume}
+                              onChange={(e) =>
+                                setEditorProduct({ ...editorProduct, volume: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div className="editor-form-field flex-2">
+                            <label>Accent Brand Color</label>
+                            <div className="editor-color-picker-group">
+                              <input
+                                type="color"
+                                className="editor-color-input"
+                                value={editorProduct.color || '#059669'}
+                                onChange={(e) =>
+                                  setEditorProduct({ ...editorProduct, color: e.target.value })
                                 }
-                              }}
-                              title="Delete product"
+                              />
+                              <div className="editor-color-presets">
+                                {[
+                                  { label: 'Emerald', hex: '#059669' },
+                                  { label: 'Orange', hex: '#f97316' },
+                                  { label: 'Golden', hex: '#eab308' },
+                                  { label: 'Ruby', hex: '#e11d48' },
+                                  { label: 'Aqua', hex: '#06b6d4' },
+                                  { label: 'Purple', hex: '#8b5cf6' },
+                                ].map((preset) => (
+                                  <button
+                                    key={preset.hex}
+                                    type="button"
+                                    className={`color-preset-swatch ${
+                                      editorProduct.color === preset.hex ? 'active' : ''
+                                    }`}
+                                    style={{ background: preset.hex }}
+                                    onClick={() =>
+                                      setEditorProduct({ ...editorProduct, color: preset.hex })
+                                    }
+                                    title={preset.label}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2. Pricing & Financials */}
+                    <div className="admin-editor-card">
+                      <div className="admin-editor-card-header">
+                        <div className="admin-editor-card-icon">
+                          <DollarSign size={18} />
+                        </div>
+                        <div>
+                          <h3>Pricing & Promotional Strategy</h3>
+                          <p>Set active customer price and optional compare-at original price</p>
+                        </div>
+                      </div>
+
+                      <div className="admin-editor-card-body">
+                        <div className="editor-form-row">
+                          <div className="editor-form-field">
+                            <label>Selling Price ($) *</label>
+                            <div className="editor-input-addon">
+                              <span className="addon-symbol">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="3.99"
+                                value={editorProduct.price}
+                                onChange={(e) =>
+                                  setEditorProduct({ ...editorProduct, price: e.target.value })
+                                }
+                                required
+                              />
+                            </div>
+                          </div>
+
+                          <div className="editor-form-field">
+                            <label>Compare At / Strikethrough Price ($)</label>
+                            <div className="editor-input-addon">
+                              <span className="addon-symbol">$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="4.99"
+                                value={editorProduct.originalPrice || ''}
+                                onChange={(e) =>
+                                  setEditorProduct({
+                                    ...editorProduct,
+                                    originalPrice: e.target.value,
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {parseFloat(editorProduct.originalPrice) > parseFloat(editorProduct.price) && (
+                          <div className="editor-discount-banner">
+                            <CheckCircle size={15} />
+                            <span>
+                              Promotional Savings Active: Displays a{' '}
+                              <strong>
+                                {Math.round(
+                                  ((parseFloat(editorProduct.originalPrice) -
+                                    parseFloat(editorProduct.price)) /
+                                    parseFloat(editorProduct.originalPrice)) *
+                                    100
+                                )}
+                                % OFF
+                              </strong>{' '}
+                              discount badge across storefront.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 3. Media Assets */}
+                    <div className="admin-editor-card">
+                      <div className="admin-editor-card-header">
+                        <div className="admin-editor-card-icon">
+                          <ImageIcon size={18} />
+                        </div>
+                        <div>
+                          <h3>Media Assets & Video</h3>
+                          <p>Provide direct image URLs for bottle rendering and high-res gallery</p>
+                        </div>
+                      </div>
+
+                      <div className="admin-editor-card-body">
+                        <div className="editor-form-field">
+                          <label>Main Bottle / Cover Image URL</label>
+                          <input
+                            type="url"
+                            placeholder="https://images.unsplash.com/photo-..."
+                            value={editorProduct.image || ''}
+                            onChange={(e) =>
+                              setEditorProduct({ ...editorProduct, image: e.target.value })
+                            }
+                          />
+                          {editorProduct.image && (
+                            <div className="editor-image-preview-strip">
+                              <img
+                                src={editorProduct.image}
+                                alt="Main Cover Preview"
+                                className="editor-thumb-img"
+                                onError={(e) => {
+                                  e.target.style.display = 'none'
+                                }}
+                              />
+                              <div className="editor-preview-label">
+                                <CheckCircle size={13} /> Cover Image loaded and verified
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="editor-form-field">
+                          <label>Reel / Product Video URL (.mp4 optional)</label>
+                          <input
+                            type="url"
+                            placeholder="https://.../video.mp4"
+                            value={editorProduct.videoUrl || ''}
+                            onChange={(e) =>
+                              setEditorProduct({ ...editorProduct, videoUrl: e.target.value })
+                            }
+                          />
+                          {editorProduct.videoUrl && (
+                            <div className="editor-video-preview-wrap">
+                              <video
+                                src={editorProduct.videoUrl}
+                                controls
+                                muted
+                                className="editor-preview-video"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="editor-form-field">
+                          <label>Gallery Image URLs (one URL per line or separated by commas)</label>
+                          <textarea
+                            rows="3"
+                            placeholder="https://...pic1.jpg&#10;https://...pic2.jpg"
+                            value={editorProduct.galleryImagesText || ''}
+                            onChange={(e) =>
+                              setEditorProduct({
+                                ...editorProduct,
+                                galleryImagesText: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 4. Nutrition & Story */}
+                    <div className="admin-editor-card">
+                      <div className="admin-editor-card-header">
+                        <div className="admin-editor-card-icon">
+                          <Flame size={18} />
+                        </div>
+                        <div>
+                          <h3>Nutrition Profile & Tasting Story</h3>
+                          <p>Caloric content, natural fruit sugars, carbs, and taste notes</p>
+                        </div>
+                      </div>
+
+                      <div className="admin-editor-card-body">
+                        <div className="editor-form-row">
+                          <div className="editor-form-field">
+                            <label>Calories</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 85 kcal"
+                              value={editorProduct.calories || ''}
+                              onChange={(e) =>
+                                setEditorProduct({ ...editorProduct, calories: e.target.value })
+                              }
+                            />
+                          </div>
+                          <div className="editor-form-field">
+                            <label>Natural Fruit Sugar</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 10g"
+                              value={editorProduct.sugar || ''}
+                              onChange={(e) =>
+                                setEditorProduct({ ...editorProduct, sugar: e.target.value })
+                              }
+                            />
+                          </div>
+                          <div className="editor-form-field">
+                            <label>Carbohydrates</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 20g"
+                              value={editorProduct.carbs || ''}
+                              onChange={(e) =>
+                                setEditorProduct({ ...editorProduct, carbs: e.target.value })
+                              }
+                            />
+                          </div>
+                        </div>
+
+                        <div className="editor-form-field">
+                          <label>Flavor Story & Tasting Notes</label>
+                          <textarea
+                            rows="4"
+                            placeholder="Crafted with organic, sun-ripened ingredients to deliver an invigorating burst of natural refreshment..."
+                            value={editorProduct.description || ''}
+                            onChange={(e) =>
+                              setEditorProduct({
+                                ...editorProduct,
+                                description: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Live Storefront Card Preview & Fast Actions */}
+                  <div className="admin-editor-side-col">
+                    <div className="editor-preview-card">
+                      <div className="editor-preview-badge-header">
+                        <span className="live-pill">
+                          <span className="pulse-dot" /> LIVE STOREFRONT CARD PREVIEW
+                        </span>
+                      </div>
+
+                      {/* Visualized bottle card */}
+                      <div
+                        className="store-card-mockup"
+                        style={{ borderColor: editorProduct.color || '#059669' }}
+                      >
+                        <div
+                          className="mockup-header-bg"
+                          style={{
+                            background: `linear-gradient(135deg, ${editorProduct.color || '#059669'}18, ${editorProduct.color || '#059669'}35)`,
+                          }}
+                        >
+                          <span
+                            className="mockup-badge"
+                            style={{
+                              backgroundColor: editorProduct.color || '#059669',
+                            }}
+                          >
+                            {editorProduct.badge || 'Organic'}
+                          </span>
+                          <img
+                            src={
+                              editorProduct.image ||
+                              'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=400&q=80'
+                            }
+                            alt=""
+                            className="mockup-bottle-img"
+                            onError={(e) => {
+                              e.target.src =
+                                'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=400&q=80'
+                            }}
+                          />
+                        </div>
+
+                        <div className="mockup-body">
+                          <div className="mockup-meta">
+                            <span className="mockup-category">{editorProduct.category || '100% Pure Juice'}</span>
+                            <span className="mockup-volume">{editorProduct.volume || '330ml'}</span>
+                          </div>
+
+                          <h4 className="mockup-name">{editorProduct.name || 'Flavor Name Preview'}</h4>
+                          <p className="mockup-sub">{editorProduct.subtitle || 'Fresh Organic Blend'}</p>
+
+                          <div className="mockup-nutrition-strip">
+                            <span>🔥 {editorProduct.calories || '90 kcal'}</span>
+                            <span>🍬 {editorProduct.sugar || '10g'} sugar</span>
+                          </div>
+
+                          <div className="mockup-price-row">
+                            <div className="mockup-prices">
+                              <span className="mockup-price">
+                                ${parseFloat(editorProduct.price || 3.99).toFixed(2)}
+                              </span>
+                              {editorProduct.originalPrice && (
+                                <span className="mockup-original-price">
+                                  ${parseFloat(editorProduct.originalPrice).toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              className="mockup-add-btn"
+                              style={{ backgroundColor: editorProduct.color || '#059669' }}
                             >
-                              <Trash2 size={15} />
+                              Add to Bag
                             </button>
                           </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+
+                      {/* Side Publishing Box */}
+                      <div className="editor-status-box">
+                        <div className="status-row">
+                          <span>Status</span>
+                          <span className="status-badge-active">Ready to Publish</span>
+                        </div>
+                        <div className="status-row">
+                          <span>Visibility</span>
+                          <span className="status-val">Public Store Catalog</span>
+                        </div>
+                        <div className="status-row">
+                          <span>Action Type</span>
+                          <span className="status-val">
+                            {editorMode === 'create' ? 'New Flavor Creation' : 'Direct DB Update'}
+                          </span>
+                        </div>
+
+                        <div className="editor-side-actions">
+                          <button
+                            type="button"
+                            className="btn-pill-primary editor-full-btn"
+                            onClick={handleSaveProduct}
+                          >
+                            <Check size={16} />
+                            <span>{editorMode === 'create' ? 'Publish Flavor' : 'Save Changes'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-pill-outline editor-full-btn"
+                            onClick={handleCancelEditor}
+                          >
+                            Discard & Return
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile Floating / Sticky Bottom Bar */}
+                <div className="admin-editor-mobile-bar">
+                  <button
+                    type="button"
+                    className="btn-pill-outline mobile-bar-cancel"
+                    onClick={handleCancelEditor}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-pill-primary mobile-bar-save"
+                    onClick={handleSaveProduct}
+                  >
+                    <Check size={16} />
+                    <span>{editorMode === 'create' ? 'Publish Flavor' : 'Save Changes'}</span>
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Standard Products Table View */
+              <>
+                <div className="admin-action-bar">
+                  <div className="admin-search-input-wrap">
+                    <Search size={16} />
+                    <input
+                      type="text"
+                      placeholder="Search products by title or category..."
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn-pill-primary admin-primary-btn"
+                    onClick={handleOpenCreateProduct}
+                  >
+                    <Plus size={16} />
+                    <span>Add New Flavor</span>
+                  </button>
+                </div>
+
+                {/* Products Table */}
+                <div className="admin-section-box">
+                  <div className="admin-table-responsive">
+                    <table className="admin-table admin-table-full-products">
+                      <thead>
+                        <tr>
+                          <th>Image</th>
+                          <th>Drink Name</th>
+                          <th>Category</th>
+                          <th>Size</th>
+                          <th>Price</th>
+                          <th>Badge</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredProductsList.map((p) => (
+                          <tr key={p.id}>
+                            <td>
+                              <img src={p.image} alt="" className="table-product-thumb" />
+                            </td>
+                            <td>
+                              <div className="product-table-name-group">
+                                <strong>{p.name}</strong>
+                                <span className="product-table-sub">{p.subtitle}</span>
+                              </div>
+                            </td>
+                            <td>{p.category}</td>
+                            <td>{p.volume}</td>
+                            <td><strong>${(Number(p.price) || 0).toFixed(2)}</strong></td>
+                            <td>
+                              <span className="admin-badge-tag">{p.badge}</span>
+                            </td>
+                            <td>
+                              <div className="admin-row-actions">
+                                <button
+                                  type="button"
+                                  className="admin-action-icon-btn"
+                                  onClick={() => handleOpenEditProduct(p)}
+                                  title="Edit product"
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="admin-action-icon-btn delete"
+                                  onClick={() => {
+                                    if (window.confirm(`Delete ${p.name}?`)) {
+                                      onDeleteProduct(p.id)
+                                      setAdminNotification(`Deleted ${p.name}`)
+                                      setTimeout(() => setAdminNotification(''), 3000)
+                                    }
+                                  }}
+                                  title="Delete product"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -742,7 +1440,7 @@ export default function AdminDashboard({
 
             <div className="admin-section-box">
               <div className="admin-table-responsive">
-                <table className="admin-table">
+                <table className="admin-table admin-table-full-orders">
                   <thead>
                     <tr>
                       <th>Order ID</th>
@@ -876,22 +1574,22 @@ export default function AdminDashboard({
               </div>
 
               <div className="security-rule-box">
-                <h4>Configured Credentials Rule</h4>
+                <h4>Security & Role Authorization</h4>
                 <div className="rule-row">
-                  <span>Authorized Email:</span>
-                  <code>admin@123</code>
+                  <span>Authentication Method:</span>
+                  <code>Supabase Passwordless Email OTP</code>
                 </div>
                 <div className="rule-row">
-                  <span>Master Password:</span>
-                  <code>•••• (1212)</code>
+                  <span>Access Control:</span>
+                  <span>Automatic redirect based on <code>role = 'admin'</code> in profiles</span>
                 </div>
                 <div className="rule-row">
-                  <span>Session Expiry:</span>
-                  <span>24 Hours (Encrypted Base64 Payload Token)</span>
+                  <span>Current Active Admin:</span>
+                  <code>{adminUser?.email || 'Authenticated Administrator'}</code>
                 </div>
                 <div className="rule-row">
                   <span>Role Authorization:</span>
-                  <span className="role-badge">SUPER_ADMIN_OPERATIONS</span>
+                  <span className="role-badge">ADMINISTRATOR</span>
                 </div>
               </div>
 

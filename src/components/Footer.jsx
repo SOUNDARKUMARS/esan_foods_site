@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Send, Check, ShieldCheck, Leaf, Globe, Heart } from 'lucide-react'
+import esanLogo from '../assets/esan_foods_logo.png'
 
 export default function Footer({ onSubscribeSuccess }) {
   const [email, setEmail] = useState('')
@@ -58,34 +59,37 @@ export default function Footer({ onSubscribeSuccess }) {
           {/* Brand Info */}
           <div className="footer-col brand-col">
             <div className="footer-logo">
-              <span className="logo-leaf">🌿</span>
-              <span className="brand-name">Juicera</span>
+              <img src={esanLogo} alt="Esan Foods" className="footer-logo-img" />
+              <div className="logo-text-wrap">
+                <span className="brand-name">Esan Foods</span>
+                <span className="brand-badge">100% Natural & Healthy</span>
+              </div>
             </div>
             <p className="footer-brand-desc">
-              Pioneering cold-pressed organic canned refreshments. Hand-tapped botanicals, real superfruits, and sparkling hydration crafted for mind and body.
+              Pioneering 100% natural, healthy, and authentic pure herbal foods. Traditional wellness recipes crafted with care for healthy living.
             </p>
             <div className="footer-badges-row">
               <div className="eco-badge">
                 <Leaf size={14} />
-                <span>100% Organic</span>
+                <span>100% Natural</span>
               </div>
               <div className="eco-badge">
                 <Globe size={14} />
-                <span>Zero Plastic</span>
+                <span>Pure Herbs</span>
               </div>
             </div>
           </div>
 
           {/* Column 2: Flavors & Shop */}
           <div className="footer-col">
-            <h4 className="footer-col-title">Shop Flavors</h4>
+            <h4 className="footer-col-title">Shop Products</h4>
             <ul className="footer-links-list">
-              <li><a href="#collections">Guava Juice Drink</a></li>
+              <li><a href="#collections">Mudakathan Leaf Powder</a></li>
               <li><a href="#collections">Pure Coconut Water</a></li>
-              <li><a href="#collections">Soursop Guanábana</a></li>
+              <li><a href="#collections">Guava Juice Drink</a></li>
               <li><a href="#spotlight">Tinned Passion Fruit</a></li>
-              <li><a href="#collections">Sparkling Strawberry</a></li>
-              <li><a href="#collections">Golden Alphonso Mango</a></li>
+              <li><a href="#collections">Herbal Health Blends</a></li>
+              <li><a href="#collections">All Herbal Products</a></li>
             </ul>
           </div>
 
@@ -94,7 +98,7 @@ export default function Footer({ onSubscribeSuccess }) {
             <h4 className="footer-col-title">Company</h4>
             <ul className="footer-links-list">
               <li><a href="#benefits">Our Philosophy</a></li>
-              <li><a href="#spotlight">Sustainable Aluminum</a></li>
+              <li><a href="#spotlight">Traditional Farming</a></li>
               <li><a href="#reviews">Verified Reviews</a></li>
               <li><a href="#faq">Frequently Asked Questions</a></li>
               <li><a href="#home">Wholesale Inquiries</a></li>
@@ -119,7 +123,7 @@ export default function Footer({ onSubscribeSuccess }) {
         {/* Bottom Legal & Copyright Bar */}
         <div className="footer-bottom-bar">
           <p className="copyright-text">
-            © {new Date().getFullYear()} Juicera Beverages Inc. All Rights Reserved. Crafted with care for wellness seekers.
+            © {new Date().getFullYear()} Esan Foods. All Rights Reserved. Pure Herbs • Healthy Living.
           </p>
           <div className="legal-links">
             <a href="#home">Privacy Policy</a>
