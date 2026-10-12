@@ -11,11 +11,11 @@ import citrusBanner from '../assets/citrus_banner.jpg'
 export { heroCans, passionSpotlight, citrusBanner }
 
 export const CATEGORIES = [
-  'All Flavors',
-  '100% Pure Juice',
-  'Sparkling Fruit',
-  'Tropical & Exotic',
-  'Hydration Boost',
+  'All Products',
+  'Herbal Leaf Powders',
+  'Organic Foods',
+  'Natural Superfoods',
+  'Wellness Blends',
 ]
 
 export const PRODUCTS = [
@@ -219,7 +219,7 @@ export const REVIEWS = [
     name: 'J. Wilkinson',
     role: 'Verified Buyer',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-    quote: 'The care we received was thoughtful, thorough, and approachable. The Guava drink is unlike any canned juice I have ever had—pure bliss!',
+    quote: 'The quality of Esan Foods is unmatched. The herbal powder blends are authentic, traditional, and 100% natural—pure wellness!',
     rating: 4.9,
     productId: 'guava-juice',
     canImg: guavaCan,
@@ -229,7 +229,7 @@ export const REVIEWS = [
     name: 'Jason Miller',
     role: 'Fitness Enthusiast',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80',
-    quote: 'I love how clean this drink tastes. No artificial flavor, just pure refreshment. The Coconut Water is my staple after intensive HIIT sessions.',
+    quote: 'I love how pure and natural these food products are. No chemicals, no preservatives, just clean traditional health.',
     rating: 5.0,
     productId: 'coconut-water',
     canImg: coconutCan,
@@ -239,7 +239,7 @@ export const REVIEWS = [
     name: 'Emily Carter',
     role: 'Marketing Manager',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80',
-    quote: 'This is my go-to drink after long workdays. Tastes great, keeps me hydrated, and the Passion Juice gives me clean energy without jitters.',
+    quote: 'My daily routine now includes Esan Foods herbal nutrition. Gives me clean natural stamina and vitality throughout the day.',
     rating: 4.9,
     productId: 'tinned-passion',
     canImg: passionCan,
@@ -269,8 +269,8 @@ export const REVIEWS = [
 export const BENEFITS = [
   {
     id: 1,
-    title: 'Instant Refreshment',
-    description: 'Revives Your Body And Mind With Every Sip.',
+    title: 'Instant Vitality',
+    description: 'Revives Your Body And Mind With Natural Organic Goodness.',
     icon: 'Sparkles',
   },
   {
@@ -295,19 +295,19 @@ export const BENEFITS = [
 
 export const FAQS = [
   {
-    q: 'Are Juicera drinks 100% organic and free of artificial additives?',
-    a: 'Yes! Every can of Juicera is crafted exclusively with non-GMO, USDA certified organic fruits, natural mountain spring water, and plant-based botanicals. We never use high fructose corn syrup, artificial colors, or chemical preservatives.',
+    q: 'Are Esan Foods products 100% organic and free of artificial additives?',
+    a: 'Yes! Every product from Esan Foods is crafted exclusively with non-GMO, certified natural herbs, traditional botanicals, and authentic ingredients. We never use artificial flavors, chemical preservatives, or synthetic colors.',
   },
   {
     q: 'How does shipping work and do you offer free delivery?',
-    a: 'We offer free expedited carbon-neutral shipping on all orders over $50 across the country. Orders placed before 2 PM EST ship the same day in temperature-insulated, 100% recyclable packaging.',
+    a: 'We offer free expedited carbon-neutral shipping on all orders over ₹50 across the country. Orders placed before 2 PM ship the same day in protective, 100% eco-friendly recyclable packaging.',
   },
   {
     q: 'What is the shelf life and storage recommendation?',
-    a: 'Unopened cans stay fresh for up to 12 months at room temperature. For optimal crispness and flavor, we recommend chilling in the refrigerator for at least 2 hours before cracking open.',
+    a: 'Unopened packages stay fresh for up to 12 months at room temperature. For optimal freshness, store in a cool, dry place away from direct sunlight.',
   },
   {
-    q: 'Are your cans recyclable and environmentally sustainable?',
-    a: 'Yes, our aluminum cans are infinitely recyclable. Aluminum can be recycled and back on store shelves in as little as 60 days, requiring 95% less energy than producing new cans.',
+    q: 'Are your packages eco-friendly and sustainable?',
+    a: 'Yes, our packages are food-grade, airtight, and made with recyclable eco-friendly materials to preserve the natural herbal nutrients and protect the environment.',
   },
 ]

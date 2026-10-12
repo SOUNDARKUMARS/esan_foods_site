@@ -35,7 +35,7 @@ export default function CustomerReviewsSection({
       role: 'Verified Buyer',
       avatar:
         'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-      quote: 'Juicera drinks bring the freshest burst of nature right into my day!',
+      quote: 'Esan Foods herbal products bring authentic natural nourishment right into my day!',
       rating: 5.0,
       productId: 'guava-juice',
     }
@@ -56,7 +56,7 @@ export default function CustomerReviewsSection({
         <div className="reviews-header text-center">
           <h2 className="section-title">WHAT OUR CUSTOMERS SAY</h2>
           <p className="section-subtitle">
-            Real feedback from health-conscious drink lovers and athletes worldwide.
+            Real feedback from health-conscious families and wellness enthusiasts.
           </p>
 
           {isEditMode && (

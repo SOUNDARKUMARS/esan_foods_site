@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { X, CheckCircle, ShieldCheck, Truck, CreditCard, ArrowRight, Sparkles } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { X, CheckCircle, ShieldCheck, Truck, CreditCard, ArrowRight, Sparkles, QrCode } from 'lucide-react'
 
 export default function CheckoutModal({
   isOpen,
@@ -7,16 +7,29 @@ export default function CheckoutModal({
   cartItems,
   discountPercent,
   onOrderSuccess,
+  currentUser = null,
 }) {
   const [step, setStep] = useState('form') // 'form' or 'success'
   const [formData, setFormData] = useState({
-    name: 'Alex Rivera',
-    email: 'alex.rivera@example.com',
-    address: '742 Evergreen Terrace',
-    city: 'San Francisco',
-    zip: '94102',
+    name: currentUser?.name || '',
+    email: currentUser?.email || '',
+    phone: currentUser?.phone || '',
+    address: 'Main Road, Anna Nagar',
+    city: 'Chennai',
+    zip: '600040',
     paymentMethod: 'card',
   })
+
+  useEffect(() => {
+    if (isOpen) {
+      setFormData((prev) => ({
+        ...prev,
+        name: currentUser?.name || prev.name || '',
+        email: currentUser?.email || prev.email || '',
+        phone: currentUser?.phone || prev.phone || '',
+      }))
+    }
+  }, [isOpen, currentUser])
 
   if (!isOpen) return null
 
@@ -33,7 +46,16 @@ export default function CheckoutModal({
   const handleSubmit = (e) => {
     e.preventDefault()
     setStep('success')
-    onOrderSuccess()
+    // Pass all order details to the parent for Supabase insertion
+    onOrderSuccess({
+      formData,
+      cartItems,
+      subtotal,
+      discountAmount,
+      shippingCost,
+      tax,
+      grandTotal,
+    })
   }
 
   const handleFinish = () => {
@@ -66,7 +88,7 @@ export default function CheckoutModal({
             </div>
             <h2 className="success-title">Order Confirmed!</h2>
             <p className="success-subtitle">
-              Thank you for choosing Esan Foods. Your authentic pure herbal foods have been scheduled for express delivery.
+              Thank you {formData.name ? `${formData.name}` : ''} for choosing Esan Foods. Your authentic pure herbal foods have been scheduled for express delivery.
             </p>
 
             <div className="order-details-card">
@@ -75,8 +97,12 @@ export default function CheckoutModal({
                 <strong>#ESN-{Math.floor(100000 + Math.random() * 900000)}</strong>
               </div>
               <div className="order-meta-row">
+                <span>Customer:</span>
+                <strong>{formData.name || 'Verified Customer'} ({formData.email})</strong>
+              </div>
+              <div className="order-meta-row">
                 <span>Delivery To:</span>
-                <strong>{formData.address}, {formData.city}</strong>
+                <strong>{formData.address}, {formData.city} {formData.zip}</strong>
               </div>
               <div className="order-meta-row">
                 <span>Estimated Arrival:</span>
@@ -84,7 +110,7 @@ export default function CheckoutModal({
               </div>
               <div className="order-meta-row total-highlight">
                 <span>Total Paid:</span>
-                <strong>${grandTotal.toFixed(2)}</strong>
+                <strong>₹{grandTotal.toFixed(2)}</strong>
               </div>
             </div>
 
@@ -118,6 +144,7 @@ export default function CheckoutModal({
                     <label>Full Name</label>
                     <input
                       type="text"
+                      placeholder="e.g. Soundarkumar Saravanan"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
@@ -127,6 +154,7 @@ export default function CheckoutModal({
                     <label>Email Address</label>
                     <input
                       type="email"
+                      placeholder="e.g. soundar@example.com"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
@@ -137,6 +165,7 @@ export default function CheckoutModal({
                   <label>Street Address</label>
                   <input
                     type="text"
+                    placeholder="e.g. Main Road, Anna Nagar"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     required
@@ -147,6 +176,7 @@ export default function CheckoutModal({
                     <label>City</label>
                     <input
                       type="text"
+                      placeholder="e.g. Chennai"
                       value={formData.city}
                       onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                       required
@@ -156,6 +186,7 @@ export default function CheckoutModal({
                     <label>Postal Code</label>
                     <input
                       type="text"
+                      placeholder="e.g. 600040"
                       value={formData.zip}
                       onChange={(e) => setFormData({ ...formData, zip: e.target.value })}
                       required
@@ -179,6 +210,15 @@ export default function CheckoutModal({
                     />
                     <span>Credit / Debit Card</span>
                   </label>
+                  <label className={`payment-pill-label ${formData.paymentMethod === 'upi' ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="payment"
+                      checked={formData.paymentMethod === 'upi'}
+                      onChange={() => setFormData({ ...formData, paymentMethod: 'upi' })}
+                    />
+                    <span>UPI / Net Banking</span>
+                  </label>
                   <label className={`payment-pill-label ${formData.paymentMethod === 'apple' ? 'selected' : ''}`}>
                     <input
                       type="radio"
@@ -195,10 +235,10 @@ export default function CheckoutModal({
               <div className="checkout-summary-strip">
                 <div className="summary-left">
                   <span>Order Total ({cartItems.reduce((acc, i) => acc + i.quantity, 0)} items):</span>
-                  <span className="summary-big-total">${grandTotal.toFixed(2)}</span>
+                  <span className="summary-big-total">₹{grandTotal.toFixed(2)}</span>
                 </div>
                 <button type="submit" className="btn-pill-primary checkout-submit-btn">
-                  <span>Place Order (${grandTotal.toFixed(2)})</span>
+                  <span>Place Order (₹{grandTotal.toFixed(2)})</span>
                   <ArrowRight size={16} />
                 </button>
               </div>

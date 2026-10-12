@@ -9,7 +9,7 @@ export const INITIAL_ORDERS = [
     customer: {
       name: 'Sarah Jenkins',
       email: 'sarah.j@example.com',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
+      avatar: null,
     },
     items: [
       { name: 'Guava Juice Drink (330ml)', qty: 4, price: 3.50 },
@@ -26,7 +26,7 @@ export const INITIAL_ORDERS = [
     customer: {
       name: 'Marcus Vance',
       email: 'm.vance@fitlife.org',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
+      avatar: null,
     },
     items: [
       { name: 'Pure Coconut Water (330ml)', qty: 12, price: 4.50 },
@@ -42,7 +42,7 @@ export const INITIAL_ORDERS = [
     customer: {
       name: 'Elena Rostova',
       email: 'elena.rostova@design.io',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
+      avatar: null,
     },
     items: [
       { name: 'Soursop Juice (330ml)', qty: 6, price: 4.50 },
@@ -59,7 +59,7 @@ export const INITIAL_ORDERS = [
     customer: {
       name: 'David Kim',
       email: 'david.kim@techcorp.com',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
+      avatar: null,
     },
     items: [
       { name: 'Golden Mango Zing (330ml)', qty: 8, price: 3.90 },
@@ -76,7 +76,7 @@ export const INITIAL_ORDERS = [
     customer: {
       name: 'Chloe Bennett',
       email: 'chloe.b@natureclub.net',
-      avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=100&q=80',
+      avatar: null,
     },
     items: [
       { name: 'Guava Juice Drink (330ml)', qty: 2, price: 3.50 },

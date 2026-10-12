@@ -21,6 +21,17 @@ import {
   RotateCcw,
   Zap,
 } from 'lucide-react'
+import {
+  getProductName,
+  getProductSubtitle,
+  getProductDescription,
+  getProductCategory,
+  getProductBadge,
+  TAMIL_UI_DICTIONARY,
+} from '../data/tamilService'
+import { getDefaultQuantityOptions, findSingleItemOption } from '../data/productService'
+import ProductReviewsSection from './ProductReviewsSection'
+import { getRatingSummary, subscribeToReviews } from '../data/reviewService'
 
 export default function ProductDetailScreen({
   product,
@@ -31,6 +42,8 @@ export default function ProductDetailScreen({
   onSelectProduct,
   wishlist = [],
   onToggleWishlist,
+  lang = 'en',
+  onToggleLang,
 }) {
   const { productId } = useParams()
   const navigate = useNavigate()
@@ -44,7 +57,7 @@ export default function ProductDetailScreen({
     )
 
   const [qty, setQty] = useState(1)
-  const [selectedPack, setSelectedPack] = useState('single') // 'single' | 'pack6' | 'pack12'
+  const [selectedPack, setSelectedPack] = useState(null)
   const [activeMedia, setActiveMedia] = useState({
     type: 'image',
     url: activeProduct?.image,
@@ -52,13 +65,44 @@ export default function ProductDetailScreen({
   })
   const [activeTab, setActiveTab] = useState('overview') // 'overview' | 'nutrition' | 'ingredients'
   const [copiedLink, setCopiedLink] = useState(false)
+  const [ratingSummary, setRatingSummary] = useState(() =>
+    activeProduct ? getRatingSummary(activeProduct.id) : { average: 5.0, totalCount: 0 }
+  )
+
+  useEffect(() => {
+    if (activeProduct?.id) {
+      setRatingSummary(getRatingSummary(activeProduct.id))
+      const unsub = subscribeToReviews(() => {
+        setRatingSummary(getRatingSummary(activeProduct.id))
+      })
+      return () => unsub()
+    }
+  }, [activeProduct?.id])
+
+  const quantityOptions = activeProduct
+    ? (Array.isArray(activeProduct.quantityOptions))
+      ? activeProduct.quantityOptions
+      : (Array.isArray(activeProduct.quantity_options))
+      ? activeProduct.quantity_options
+      : (Array.isArray(activeProduct.nutrition?.quantityOptions))
+      ? activeProduct.nutrition.quantityOptions
+      : (activeProduct.price !== undefined ? getDefaultQuantityOptions(activeProduct.price, activeProduct.volume) : [])
+    : []
 
   // Scroll to top on mount or product change
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
     if (activeProduct) {
       setQty(1)
-      setSelectedPack('single')
+      const opts = Array.isArray(activeProduct.quantityOptions)
+        ? activeProduct.quantityOptions
+        : (Array.isArray(activeProduct.quantity_options)
+        ? activeProduct.quantity_options
+        : (Array.isArray(activeProduct.nutrition?.quantityOptions)
+        ? activeProduct.nutrition.quantityOptions
+        : (activeProduct.price !== undefined ? getDefaultQuantityOptions(activeProduct.price, activeProduct.volume) : [])))
+      const defaultOpt = findSingleItemOption(opts)
+      setSelectedPack(defaultOpt?.id || opts[0]?.id || null)
       setActiveMedia({
         type: 'image',
         url: activeProduct.image,
@@ -102,20 +146,19 @@ export default function ProductDetailScreen({
       ? [activeProduct.image]
       : []
 
-  // Pack multiplier calculation
-  const packMultiplier = selectedPack === 'pack12' ? 12 : selectedPack === 'pack6' ? 6 : 1
-  const packDiscount = selectedPack === 'pack12' ? 0.85 : selectedPack === 'pack6' ? 0.9 : 1
-  const unitPrice = Number(activeProduct.price) || 0
-  const packUnitPrice = (unitPrice * packDiscount).toFixed(2)
-  const totalPrice = (unitPrice * packDiscount * packMultiplier * qty).toFixed(2)
+  // Current active quantity/pack option
+  const currentOption = quantityOptions.length > 0
+    ? (quantityOptions.find((opt) => opt.id === selectedPack) || quantityOptions[0] || null)
+    : null
+  const unitPrice = Number(currentOption?.price ?? activeProduct.price ?? 0)
+  const totalPrice = (unitPrice * qty).toFixed(2)
 
   const handleQtyChange = (delta) => {
     setQty((prev) => Math.max(1, prev + delta))
   }
 
   const handleAdd = () => {
-    // Add items with appropriate pack quantity
-    onAddToCart(activeProduct, qty * packMultiplier)
+    onAddToCart(activeProduct, qty, currentOption || null)
   }
 
   const handleBack = () => {
@@ -165,10 +208,30 @@ export default function ProductDetailScreen({
             <span className="crumb-sep">/</span>
             <span onClick={handleBack} className="crumb-link">Shop</span>
             <span className="crumb-sep">/</span>
-            <span className="crumb-current">{activeProduct.name}</span>
+            <span className="crumb-current">{getProductName(activeProduct, lang)}</span>
           </nav>
 
           <div className="detail-top-actions">
+            {/* Language Switcher Pill: EN | தமிழ் */}
+            <div className="detail-lang-pill-toggle">
+              <button
+                type="button"
+                className={`detail-lang-btn ${lang === 'en' ? 'active' : ''}`}
+                onClick={() => onToggleLang && onToggleLang('en')}
+                title="View in English"
+              >
+                EN
+              </button>
+              <button
+                type="button"
+                className={`detail-lang-btn ${lang === 'ta' ? 'active' : ''}`}
+                onClick={() => onToggleLang && onToggleLang('ta')}
+                title="தமிழில் பார்க்கவும்"
+              >
+                தமிழ்
+              </button>
+            </div>
+
             <button
               type="button"
               className="detail-icon-action-btn"
@@ -275,7 +338,7 @@ export default function ProductDetailScreen({
                   onClick={() =>
                     setActiveMedia({
                       type: 'video',
-                      url: product.videoUrl,
+                      url: activeProduct.videoUrl,
                       index: -1,
                     })
                   }
@@ -291,34 +354,27 @@ export default function ProductDetailScreen({
 
             {/* Quality Seals Strip */}
             <div className="detail-seals-grid">
-              <div className="detail-seal-item">
-                <Leaf size={16} className="text-emerald-500" />
-                <div>
-                  <strong>100% Natural</strong>
-                  <span>Pure Herbal Ingredients</span>
-                </div>
-              </div>
-              <div className="detail-seal-item">
-                <ShieldCheck size={16} className="text-emerald-500" />
-                <div>
-                  <strong>No Preservatives</strong>
-                  <span>Zero Artificial Colors</span>
-                </div>
-              </div>
-              <div className="detail-seal-item">
-                <Truck size={16} className="text-emerald-500" />
-                <div>
-                  <strong>Fresh Express</strong>
-                  <span>Direct Farm Shipping</span>
-                </div>
-              </div>
-              <div className="detail-seal-item">
-                <RotateCcw size={16} className="text-emerald-500" />
-                <div>
-                  <strong>Satisfaction</strong>
-                  <span>Guaranteed Quality</span>
-                </div>
-              </div>
+              {(
+                Array.isArray(activeProduct.seals) && activeProduct.seals.length === 4 && activeProduct.seals[0]?.title
+                  ? activeProduct.seals
+                  : [
+                      { title: '100% Natural', desc: 'Pure Herbal Ingredients' },
+                      { title: 'No Preservatives', desc: 'Zero Artificial Colors' },
+                      { title: 'Fresh Express', desc: 'Direct Farm Shipping' },
+                      { title: 'Satisfaction', desc: 'Guaranteed Quality' },
+                    ]
+              ).map((seal, idx) => {
+                const IconComponent = idx === 0 ? Leaf : idx === 1 ? ShieldCheck : idx === 2 ? Truck : RotateCcw
+                return (
+                  <div key={idx} className="detail-seal-item">
+                    <IconComponent size={16} className="text-emerald-500" />
+                    <div>
+                      <strong>{seal.title}</strong>
+                      <span>{seal.desc}</span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
 
@@ -327,33 +383,48 @@ export default function ProductDetailScreen({
             {/* Header info */}
             <div className="detail-header-block">
               <div className="detail-category-row">
-                <span className="detail-category-pill">{activeProduct.category}</span>
-                <span className="detail-volume-pill">{activeProduct.volume}</span>
+                <span className="detail-category-pill">
+                  {getProductCategory(activeProduct, lang)}
+                </span>
+                <span className="detail-volume-pill">{activeProduct.volume || '250ml'}</span>
                 <span className="detail-stock-badge">
-                  <span className="stock-dot"></span> In Stock • Ships Today
+                  <span className="stock-dot"></span>{' '}
+                  {activeProduct.stockStatus || (lang === 'ta' ? 'இருப்பில் உள்ளது • இன்றே டெலிவரி' : 'In Stock • Ships Today')}
                 </span>
               </div>
 
-              <h1 className="detail-product-title">{activeProduct.name}</h1>
-              {activeProduct.subtitle && (
-                <p className="detail-product-subtitle">{activeProduct.subtitle}</p>
-              )}
+              <h1 className="detail-product-title">
+                {getProductName(activeProduct, lang)}
+              </h1>
+              <p className="detail-product-subtitle">
+                {getProductSubtitle(activeProduct, lang)}
+              </p>
 
-              {/* Rating Breakdown */}
-              <div className="detail-ratings-row">
+              {/* Rating Breakdown & Jump to Reviews */}
+              <div
+                className="detail-ratings-row"
+                style={{ cursor: 'pointer' }}
+                onClick={() => {
+                  document.getElementById('product-reviews')?.scrollIntoView({ behavior: 'smooth' })
+                }}
+                title={lang === 'ta' ? 'விமர்சனங்கள் பகுதிக்குச் செல்ல கிளிக் செய்யவும்' : 'Click to jump to customer reviews & write your review'}
+              >
                 <div className="detail-stars-group">
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
                       size={16}
-                      className="star-filled"
-                      fill="currentColor"
+                      className={i < Math.round(ratingSummary.average) ? 'star-filled' : 'star-empty'}
+                      fill={i < Math.round(ratingSummary.average) ? 'currentColor' : 'none'}
                     />
                   ))}
                 </div>
-                <strong className="detail-score">{activeProduct.rating || '4.9'}</strong>
+                <strong className="detail-score">{ratingSummary.average.toFixed(1)}</strong>
                 <span className="detail-review-count">
-                  ({activeProduct.reviewsCount || 428} verified customer reviews)
+                  ({ratingSummary.totalCount} {lang === 'ta' ? 'வாடிக்கையாளர் மதிப்புரைகள்' : 'customer reviews'})
+                </span>
+                <span className="detail-review-jump-hint" style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 600, marginLeft: '6px' }}>
+                  {lang === 'ta' ? 'விமர்சனங்கள் பார்க்க →' : 'View all reviews →'}
                 </span>
               </div>
             </div>
@@ -361,74 +432,57 @@ export default function ProductDetailScreen({
             {/* Price Row */}
             <div className="detail-price-card">
               <div className="detail-price-main">
-                <span className="detail-curr-price">${packUnitPrice}</span>
+                <span className="detail-curr-price">₹{unitPrice.toFixed(2)}</span>
                 {activeProduct.originalPrice && (
                   <span className="detail-orig-price">
-                    ${Number(activeProduct.originalPrice).toFixed(2)}
+                    ₹{Number(activeProduct.originalPrice).toFixed(2)}
                   </span>
                 )}
                 <span className="detail-per-unit">/ unit</span>
               </div>
-              {selectedPack !== 'single' && (
+              {currentOption?.discountText && (
                 <span className="detail-bulk-save-badge">
-                  {selectedPack === 'pack12' ? 'Save 15% (Bulk Value)' : 'Save 10% (Best Seller)'}
+                  {currentOption.discountText}
                 </span>
               )}
             </div>
 
             {/* Pack Size Selection */}
-            <div className="detail-pack-selector-section">
-              <span className="detail-section-label">Select Quantity Option:</span>
-              <div className="detail-pack-grid">
-                <button
-                  type="button"
-                  className={`detail-pack-card ${selectedPack === 'single' ? 'active' : ''}`}
-                  onClick={() => setSelectedPack('single')}
-                >
-                  <div className="pack-card-left">
-                    <span className="pack-title">Single Item</span>
-                    <span className="pack-desc">{activeProduct.volume}</span>
-                  </div>
-                  <div className="pack-card-right">
-                    <strong className="pack-price">${unitPrice.toFixed(2)}</strong>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  className={`detail-pack-card ${selectedPack === 'pack6' ? 'active' : ''}`}
-                  onClick={() => setSelectedPack('pack6')}
-                >
-                  <div className="pack-card-left">
-                    <div className="pack-title-row">
-                      <span className="pack-title">Pack of 6.</span>
-                      <span className="pack-badge">Popular</span>
-                    </div>
-                    <span className="pack-desc">Save 10%</span>
-                  </div>
-                  <div className="pack-card-right">
-                    <strong className="pack-price">${(unitPrice * 0.9 * 6).toFixed(2)}</strong>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  className={`detail-pack-card ${selectedPack === 'pack12' ? 'active' : ''}`}
-                  onClick={() => setSelectedPack('pack12')}
-                >
-                  <div className="pack-card-left">
-                    <div className="pack-title-row">
-                      <span className="pack-title">Pack of 12</span>
-                      <span className="pack-badge bulk">Best Value</span>
-                    </div>
-                    <span className="pack-desc">Save 15%</span>
-                  </div>
-                  <div className="pack-card-right">
-                    <strong className="pack-price">${(unitPrice * 0.85 * 12).toFixed(2)}</strong>
-                  </div>
-                </button>
+            {quantityOptions.length > 0 && (
+              <div className="detail-pack-selector-section">
+                <span className="detail-section-label">
+                  {lang === 'ta' ? 'அளவைத் தேர்ந்தெடுக்கவும்:' : 'Select Quantity Option:'}
+                </span>
+                <div className="detail-pack-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))' }}>
+                  {quantityOptions.map((opt) => {
+                    const isSelected = (currentOption?.id === opt.id)
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={`detail-pack-card ${isSelected ? 'active' : ''}`}
+                        onClick={() => setSelectedPack(opt.id)}
+                      >
+                        {opt.badge && (
+                          <span className={`pack-badge ${opt.badge.toLowerCase().includes('value') ? 'bulk' : ''}`}>
+                            {opt.badge}
+                          </span>
+                        )}
+                        <div className="pack-card-left">
+                          <span className="pack-title">{opt.title}</span>
+                          {(opt.size || opt.discountText) && (
+                            <span className="pack-desc">{opt.size || opt.discountText}</span>
+                          )}
+                        </div>
+                        <div className="pack-card-right">
+                          <strong className="pack-price">₹{Number(opt.price || 0).toFixed(2)}</strong>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Stepper & Add to Bag CTA */}
             <div className="detail-action-group">
@@ -460,24 +514,30 @@ export default function ProductDetailScreen({
                 onClick={handleAdd}
               >
                 <ShoppingBag size={18} />
-                <span>Add to Bag — ${totalPrice}</span>
+                <span>
+                  {lang === 'ta'
+                    ? `கூடையில் சேர்க்க — ₹${totalPrice}`
+                    : `Add to Bag — ₹${totalPrice}`}
+                </span>
               </button>
             </div>
 
             {/* Fast Features Highlights */}
             <div className="detail-key-highlights">
-              <div className="highlight-pill">
-                <CheckCircle2 size={14} className="text-emerald-600" />
-                <span>Cold-Extracted Purity</span>
-              </div>
-              <div className="highlight-pill">
-                <CheckCircle2 size={14} className="text-emerald-600" />
-                <span>Zero Synthetic Additives</span>
-              </div>
-              <div className="highlight-pill">
-                <CheckCircle2 size={14} className="text-emerald-600" />
-                <span>Traditional Wellness Heritage</span>
-              </div>
+              {(
+                Array.isArray(activeProduct.highlights) && activeProduct.highlights.length > 0
+                  ? activeProduct.highlights
+                  : [
+                      'Cold-Extracted Purity',
+                      'Zero Synthetic Additives',
+                      'Traditional Wellness Heritage',
+                    ]
+              ).map((hl, idx) => (
+                <div key={idx} className="highlight-pill">
+                  <CheckCircle2 size={14} className="text-emerald-600" />
+                  <span>{hl}</span>
+                </div>
+              ))}
             </div>
 
             {/* Informational Tabs (Overview, Nutrition, Ingredients, Reviews) */}
@@ -488,28 +548,28 @@ export default function ProductDetailScreen({
                   className={`detail-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
                   onClick={() => setActiveTab('overview')}
                 >
-                  Overview & Taste
+                  {lang === 'ta' ? 'அறிமுகம் & சுவை' : 'Overview & Taste'}
                 </button>
                 <button
                   type="button"
                   className={`detail-tab-btn ${activeTab === 'nutrition' ? 'active' : ''}`}
                   onClick={() => setActiveTab('nutrition')}
                 >
-                  Nutrition Facts
+                  {lang === 'ta' ? 'ஊட்டச்சத்து விவரங்கள்' : 'Nutrition Facts'}
                 </button>
                 <button
                   type="button"
                   className={`detail-tab-btn ${activeTab === 'ingredients' ? 'active' : ''}`}
                   onClick={() => setActiveTab('ingredients')}
                 >
-                  Pure Ingredients
+                  {lang === 'ta' ? 'மூலிகைப் பொருட்கள்' : 'Pure Ingredients'}
                 </button>
                 <button
                   type="button"
                   className={`detail-tab-btn ${activeTab === 'how-to-use' ? 'active' : ''}`}
                   onClick={() => setActiveTab('how-to-use')}
                 >
-                  How to Use
+                  {lang === 'ta' ? 'பயன்படுத்தும் முறை' : 'How to Use'}
                 </button>
               </div>
 
@@ -517,7 +577,8 @@ export default function ProductDetailScreen({
                 {activeTab === 'overview' && (
                   <div className="detail-tab-content animate-fade-in">
                     <p className="detail-long-desc">
-                      {activeProduct.description ||
+                      {getProductDescription(activeProduct, lang) ||
+                        activeProduct.description ||
                         'Crafted with pride using 100% natural and authentic traditional recipes. Our wholesome herbal preparations retain full botanical vitality, offering gentle natural nourishment and unmatched authentic taste.'}
                     </p>
 
@@ -544,31 +605,31 @@ export default function ProductDetailScreen({
                       <div className="nutri-stat-card">
                         <span className="stat-label">Calories</span>
                         <strong className="stat-val">
-                          {activeProduct.nutrition?.calories || '90 kcal'}
+                          {activeProduct.nutrition?.calories || activeProduct.calories || '90 kcal'}
                         </strong>
                       </div>
                       <div className="nutri-stat-card">
                         <span className="stat-label">Natural Sugars</span>
                         <strong className="stat-val">
-                          {activeProduct.nutrition?.sugar || '10g'}
+                          {activeProduct.nutrition?.sugar || activeProduct.sugar || '10g'}
                         </strong>
                       </div>
                       <div className="nutri-stat-card">
                         <span className="stat-label">Carbohydrates</span>
                         <strong className="stat-val">
-                          {activeProduct.nutrition?.carbs || '20g'}
+                          {activeProduct.nutrition?.carbs || activeProduct.carbs || '20g'}
                         </strong>
                       </div>
                       <div className="nutri-stat-card">
                         <span className="stat-label">Vitamin C</span>
                         <strong className="stat-val">
-                          {activeProduct.nutrition?.vitaminC || '100% DV'}
+                          {activeProduct.nutrition?.vitaminC || activeProduct.vitaminC || '100% DV'}
                         </strong>
                       </div>
                       <div className="nutri-stat-card">
                         <span className="stat-label">Organic Certified</span>
                         <strong className="stat-val">
-                          {activeProduct.nutrition?.organic || '100%'}
+                          {activeProduct.nutrition?.organic || activeProduct.organic || '100%'}
                         </strong>
                       </div>
                     </div>
@@ -603,8 +664,12 @@ export default function ProductDetailScreen({
                           <Droplets size={24} className="text-emerald-600" />
                         </div>
                         <div className="step-content">
-                          <h4 className="step-title">1. Prep</h4>
-                          <p className="step-desc">Mix 1-2 scoops of the herbal blend with warm water.</p>
+                          <h4 className="step-title">
+                            {activeProduct.howToUse?.prepTitle || activeProduct.prepTitle || '1. Prep'}
+                          </h4>
+                          <p className="step-desc">
+                            {activeProduct.howToUse?.prepStep || activeProduct.prepStep || 'Mix 1-2 scoops of the herbal blend with warm water.'}
+                          </p>
                         </div>
                       </div>
                       
@@ -613,8 +678,12 @@ export default function ProductDetailScreen({
                           <Zap size={24} className="text-emerald-600" />
                         </div>
                         <div className="step-content">
-                          <h4 className="step-title">2. Blend</h4>
-                          <p className="step-desc">Stir thoroughly until completely dissolved for a smooth texture.</p>
+                          <h4 className="step-title">
+                            {activeProduct.howToUse?.blendTitle || activeProduct.blendTitle || '2. Blend'}
+                          </h4>
+                          <p className="step-desc">
+                            {activeProduct.howToUse?.blendStep || activeProduct.blendStep || 'Stir thoroughly until completely dissolved for a smooth texture.'}
+                          </p>
                         </div>
                       </div>
                       
@@ -623,8 +692,12 @@ export default function ProductDetailScreen({
                           <Sparkles size={24} className="text-emerald-600" />
                         </div>
                         <div className="step-content">
-                          <h4 className="step-title">3. Enjoy</h4>
-                          <p className="step-desc">Consume daily for optimal natural nourishment and vitality.</p>
+                          <h4 className="step-title">
+                            {activeProduct.howToUse?.enjoyTitle || activeProduct.enjoyTitle || '3. Enjoy'}
+                          </h4>
+                          <p className="step-desc">
+                            {activeProduct.howToUse?.enjoyStep || activeProduct.enjoyStep || 'Consume daily for optimal natural nourishment and vitality.'}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -635,12 +708,28 @@ export default function ProductDetailScreen({
           </div>
         </div>
 
+        {/* Customer Ratings Breakdown & Reviews Section */}
+        <ProductReviewsSection
+          productId={activeProduct.id}
+          productName={getProductName(activeProduct, lang)}
+          lang={lang}
+          onReviewAdded={() => {
+            setRatingSummary(getRatingSummary(activeProduct.id))
+          }}
+        />
+
         {/* You May Also Like / Related Products Section */}
         {relatedProducts.length > 0 && (
           <div className="detail-related-section">
             <div className="section-header-compact">
-              <h3 className="section-title-compact">You May Also Love</h3>
-              <p className="section-sub-compact">Handcrafted complementary herbal wellness blends</p>
+              <h3 className="section-title-compact">
+                {lang === 'ta' ? 'உங்களுக்குப் பிடித்த பிற தயாரிப்புகள்' : 'You May Also Love'}
+              </h3>
+              <p className="section-sub-compact">
+                {lang === 'ta'
+                  ? 'இயற்கையான பாரம்பரிய மூலிகைக் கலவைகள்'
+                  : 'Handcrafted complementary herbal wellness blends'}
+              </p>
             </div>
 
             <div className="detail-related-grid">
@@ -651,7 +740,7 @@ export default function ProductDetailScreen({
                   onClick={() => handleSelectRelated(rel)}
                 >
                   <div className="related-img-box">
-                    <img src={rel.image} alt={rel.name} />
+                    <img src={rel.image} alt={getProductName(rel, lang)} />
                     <button
                       type="button"
                       className="related-expand-btn"
@@ -659,17 +748,19 @@ export default function ProductDetailScreen({
                         e.stopPropagation()
                         onQuickView(rel)
                       }}
-                      title="Quick View Preview"
+                      title={lang === 'ta' ? 'விரைவு முன்னோட்டம்' : 'Quick View Preview'}
                     >
                       <Maximize2 size={13} />
                     </button>
                   </div>
                   <div className="related-info-box">
-                    <span className="related-cat">{rel.category}</span>
-                    <h4 className="related-name">{rel.name}</h4>
+                    <span className="related-cat">{getProductCategory(rel, lang)}</span>
+                    <h4 className="related-name">{getProductName(rel, lang)}</h4>
                     <div className="related-price-row">
-                      <strong>${Number(rel.price).toFixed(2)}</strong>
-                      <span className="related-action-link">View Details →</span>
+                      <strong>₹{Number(rel.price).toFixed(2)}</strong>
+                      <span className="related-action-link">
+                        {lang === 'ta' ? 'விவரங்கள் பார்க்க →' : 'View Details →'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -682,10 +773,10 @@ export default function ProductDetailScreen({
       {/* Mobile Sticky Bottom Floating Action Bar */}
       <div className="detail-mobile-sticky-bar">
         <div className="sticky-bar-left">
-          <img src={activeProduct.image} alt={activeProduct.name} className="sticky-thumb" />
+          <img src={activeProduct.image} alt={getProductName(activeProduct, lang)} className="sticky-thumb" />
           <div className="sticky-meta">
-            <span className="sticky-title">{activeProduct.name}</span>
-            <strong className="sticky-price">${totalPrice}</strong>
+            <span className="sticky-title">{getProductName(activeProduct, lang)}</span>
+            <strong className="sticky-price">₹{totalPrice}</strong>
           </div>
         </div>
         <button
@@ -694,7 +785,7 @@ export default function ProductDetailScreen({
           onClick={handleAdd}
         >
           <ShoppingBag size={16} />
-          <span>Add to Bag</span>
+          <span>{lang === 'ta' ? 'கூடையில் சேர்க்க' : 'Add to Bag'}</span>
         </button>
       </div>
     </div>

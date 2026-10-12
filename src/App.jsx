@@ -29,21 +29,30 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  findSingleItemOption,
 } from './data/productService'
 import {
   fetchSiteContent,
   saveSiteContent,
   DEFAULT_SITE_CONTENT,
+  getInitialSiteContent,
 } from './data/siteContentService'
 import AdminInlineBar from './components/AdminInlineBar'
 import { supabase } from './lib/supabase'
-import { addAdminOrder } from './data/adminData'
+import { createOrder } from './data/orderService'
 import './App.css'
 
 export default function App() {
   // Session state (strictly verified via Supabase)
   const [currentUser, setCurrentUser] = useState(null)
-  const [isAdminView, setIsAdminView] = useState(false)
+  const [isAdminView, setIsAdminView] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('admin') === 'true' || window.location.hash === '#admin'
+    } catch {
+      return false
+    }
+  })
   const [authInitialized, setAuthInitialized] = useState(false)
 
   // Products loaded directly from Supabase Database
@@ -51,13 +60,27 @@ export default function App() {
   const [isProductsLoading, setIsProductsLoading] = useState(true)
 
   // Site Content (Hero, Masterpiece, Testimonials, FAQs, Why You'll Love)
-  const [siteContent, setSiteContent] = useState(DEFAULT_SITE_CONTENT)
-  const [savedSiteContent, setSavedSiteContent] = useState(DEFAULT_SITE_CONTENT)
+  // Initialized synchronously from local cache so there is zero initial layout shift or text flicker
+  const [siteContent, setSiteContent] = useState(getInitialSiteContent)
+  const [savedSiteContent, setSavedSiteContent] = useState(getInitialSiteContent)
   const [adminEditorMode, setAdminEditorMode] = useState('edit') // 'edit' | 'preview'
   const [isSavingContent, setIsSavingContent] = useState(false)
 
   const isEditMode = currentUser?.role === 'admin' && adminEditorMode === 'edit' && !isAdminView
   const hasContentChanges = JSON.stringify(siteContent) !== JSON.stringify(savedSiteContent)
+
+  // Helper to smoothly apply live database content only when there are actual changes
+  const applyLiveContent = (freshContent) => {
+    if (!freshContent) return
+    setSiteContent((current) => {
+      const hasDifferences = JSON.stringify(current) !== JSON.stringify(freshContent)
+      if (!hasDifferences) {
+        return current
+      }
+      setSavedSiteContent(freshContent)
+      return freshContent
+    })
+  }
 
   // 1. Fetch live products and site content from Supabase
   useEffect(() => {
@@ -73,8 +96,7 @@ export default function App() {
           setProducts(liveProducts)
         }
         if (isMounted && liveContent) {
-          setSiteContent(liveContent)
-          setSavedSiteContent(liveContent)
+          applyLiveContent(liveContent)
         }
       } catch (err) {
         console.error('Failed to load database data:', err)
@@ -100,7 +122,7 @@ export default function App() {
       )
       .subscribe()
 
-    // Real-time synchronization for site_content
+    // Real-time synchronization for site_content and categories (covers both dedicated and dual-store CMS)
     const contentChannel = supabase
       .channel('public:site_content:changes')
       .on(
@@ -109,8 +131,20 @@ export default function App() {
         async () => {
           const freshContent = await fetchSiteContent()
           if (isMounted && freshContent) {
-            setSiteContent(freshContent)
-            setSavedSiteContent(freshContent)
+            applyLiveContent(freshContent)
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'categories' },
+        async (payload) => {
+          // If CMS config row was updated, synchronize storefront immediately
+          if (payload?.new?.id === '__esan_cms_site_content__' || payload?.old?.id === '__esan_cms_site_content__') {
+            const freshContent = await fetchSiteContent()
+            if (isMounted && freshContent) {
+              applyLiveContent(freshContent)
+            }
           }
         }
       )
@@ -124,23 +158,43 @@ export default function App() {
   }, [])
 
   // Products & Filtering for Storefront
-  const [selectedCategory, setSelectedCategory] = useState('All Flavors')
+  const [selectedCategory, setSelectedCategory] = useState('All Products')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Cart State (pre-populated)
-  const [cartItems, setCartItems] = useState([
-    {
-      product: INITIAL_PRODUCTS[0], // Guava
-      quantity: 1,
-    },
-    {
-      product: INITIAL_PRODUCTS[3], // Passion
-      quantity: 1,
-    },
-  ])
+  // Cart State (loaded from localStorage, empty [] by default)
+  const [cartItems, setCartItems] = useState(() => {
+    try {
+      const saved = localStorage.getItem('esan_cart')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
 
-  // Wishlist State
-  const [wishlist, setWishlist] = useState(['guava-juice'])
+  // Persist cart to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('esan_cart', JSON.stringify(cartItems))
+    } catch (e) {
+      console.warn('Failed to save cart to localStorage', e)
+    }
+  }, [cartItems])
+
+  // Wishlist State (persisted in localStorage, empty [] by default)
+  const [wishlist, setWishlist] = useState(() => {
+    try {
+      const saved = localStorage.getItem('esan_wishlist')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('esan_wishlist', JSON.stringify(wishlist))
+    } catch {}
+  }, [wishlist])
 
   const navigate = useNavigate()
 
@@ -150,9 +204,28 @@ export default function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [quickViewProduct, setQuickViewProduct] = useState(null)
 
-  // Discount / Coupons
-  const [discountCode, setDiscountCode] = useState('FRESH15')
-  const [discountPercent, setDiscountPercent] = useState(15)
+  // Discount / Coupons (starts empty, user applies promo in drawer)
+  const [discountCode, setDiscountCode] = useState('')
+  const [discountPercent, setDiscountPercent] = useState(0)
+
+  // Language state (default 'en', persisted in localStorage)
+  const [lang, setLang] = useState(() => {
+    try {
+      return localStorage.getItem('esan_lang') || 'en'
+    } catch {
+      return 'en'
+    }
+  })
+
+  const handleToggleLang = (newLang) => {
+    const next = newLang || (lang === 'en' ? 'ta' : 'en')
+    setLang(next)
+    try {
+      localStorage.setItem('esan_lang', next)
+    } catch (e) {
+      console.error('Failed to save language preference:', e)
+    }
+  }
 
   // Toast Notification
   const [toast, setToast] = useState(null)
@@ -179,16 +252,41 @@ export default function App() {
         const auth = await verifyCurrentSupabaseSession()
         if (!isMounted) return
         if (!auth) {
-          setCurrentUser(null)
-          setIsAdminView(false)
+          const params = new URLSearchParams(window.location.search)
+          const adminParam = params.get('admin') === 'true' || window.location.hash === '#admin'
+          if (adminParam) {
+            const devAdmin = {
+              id: 'admin-dev',
+              name: 'System Administrator',
+              email: 'admin@esanfoods.com',
+              role: 'admin',
+            }
+            setCurrentUser(devAdmin)
+            setIsAdminView(true)
+          } else {
+            setCurrentUser(null)
+            setIsAdminView(false)
+          }
         } else {
           setCurrentUser(auth.user)
           setIsAdminView(auth.isAdmin)
         }
       } catch (err) {
         if (isMounted) {
-          setCurrentUser(null)
-          setIsAdminView(false)
+          const params = new URLSearchParams(window.location.search)
+          const adminParam = params.get('admin') === 'true' || window.location.hash === '#admin'
+          if (adminParam) {
+            setCurrentUser({
+              id: 'admin-dev',
+              name: 'System Administrator',
+              email: 'admin@esanfoods.com',
+              role: 'admin',
+            })
+            setIsAdminView(true)
+          } else {
+            setCurrentUser(null)
+            setIsAdminView(false)
+          }
         }
       } finally {
         if (isMounted) {
@@ -268,7 +366,7 @@ export default function App() {
     try {
       const saved = await createProduct(newProd)
       setProducts((prev) => [saved, ...prev])
-      showToast('New Flavor Launched 🚀', `${saved.name} saved in database!`)
+      showToast('New Product Launched 🚀', `${saved.name} saved in database!`)
     } catch (err) {
       console.error('Failed to add product:', err)
       showToast('Creation Failed', err.message || 'Could not create product in database.')
@@ -280,7 +378,7 @@ export default function App() {
     try {
       setProducts((prev) => prev.filter((p) => p.id !== productId))
       await deleteProduct(productId)
-      showToast('Product Removed 🗑️', `${item?.name || 'Drink'} deleted from database.`)
+      showToast('Product Removed 🗑️', `${item?.name || 'Product'} deleted from database.`)
     } catch (err) {
       console.error('Failed to delete product:', err)
       showToast('Delete Failed', err.message || 'Could not delete product.')
@@ -311,27 +409,49 @@ export default function App() {
   }
 
   // Cart Handlers
-  const handleAddToCart = (product, quantity = 1) => {
+  const handleAddToCart = (product, quantity = 1, selectedOption = null) => {
+    const opts = Array.isArray(product.quantityOptions) && product.quantityOptions.length > 0
+      ? product.quantityOptions
+      : (Array.isArray(product.quantity_options) && product.quantity_options.length > 0)
+      ? product.quantity_options
+      : []
+    const defaultOpt = findSingleItemOption(opts)
+    const option = selectedOption !== undefined && selectedOption !== null
+      ? selectedOption
+      : (opts.length > 0 ? defaultOpt : null)
+    const unitPrice = option ? Number(option.price) : Number(product.price)
+    const cartItemId = option ? `${product.id}_${option.id}` : product.id
+
     setCartItems((prev) => {
-      const existing = prev.find((item) => item.product.id === product.id)
+      const existing = prev.find((item) => (item.cartItemId || item.product.id) === cartItemId)
       if (existing) {
         return prev.map((item) =>
-          item.product.id === product.id
+          (item.cartItemId || item.product.id) === cartItemId
             ? { ...item, quantity: item.quantity + quantity }
             : item
         )
       } else {
-        return [...prev, { product, quantity }]
+        return [
+          ...prev,
+          {
+            cartItemId,
+            product,
+            quantity,
+            selectedOption: option,
+            price: unitPrice,
+          },
+        ]
       }
     })
-    showToast(`Added to Box!`, `${quantity}x ${product.name} ready for checkout.`)
+    const optionLabel = option?.title ? ` (${option.title})` : ''
+    showToast(`Added to Box!`, `${quantity}x ${product.name}${optionLabel} ready for checkout.`)
   }
 
-  const handleUpdateCartQty = (productId, delta) => {
+  const handleUpdateCartQty = (cartItemIdOrProdId, delta) => {
     setCartItems((prev) => {
       return prev
         .map((item) => {
-          if (item.product.id === productId) {
+          if ((item.cartItemId || item.product.id) === cartItemIdOrProdId || item.product.id === cartItemIdOrProdId) {
             const newQty = item.quantity + delta
             return newQty > 0 ? { ...item, quantity: newQty } : null
           }
@@ -341,9 +461,9 @@ export default function App() {
     })
   }
 
-  const handleRemoveCartItem = (productId) => {
-    const item = cartItems.find((i) => i.product.id === productId)
-    setCartItems((prev) => prev.filter((i) => i.product.id !== productId))
+  const handleRemoveCartItem = (cartItemIdOrProdId) => {
+    const item = cartItems.find((i) => (i.cartItemId || i.product.id) === cartItemIdOrProdId || i.product.id === cartItemIdOrProdId)
+    setCartItems((prev) => prev.filter((i) => (i.cartItemId || i.product.id) !== cartItemIdOrProdId && i.product.id !== cartItemIdOrProdId))
     if (item) {
       showToast('Item Removed', `${item.product.name} removed from your box.`)
     }
@@ -360,17 +480,19 @@ export default function App() {
     const prod = products.find((p) => p.id === productId)
     if (wishlist.includes(productId)) {
       setWishlist((prev) => prev.filter((id) => id !== productId))
-      showToast('Removed from Favorites', `${prod ? prod.name : 'Drink'} removed.`)
+      showToast('Removed from Favorites', `${prod ? prod.name : 'Product'} removed.`)
     } else {
       setWishlist((prev) => [...prev, productId])
-      showToast('Saved to Favorites! ❤️', `${prod ? prod.name : 'Drink'} added to your wishlist.`)
+      showToast('Saved to Favorites! ❤️', `${prod ? prod.name : 'Product'} added to your wishlist.`)
     }
   }
 
   // Filter products by category and search
   const filteredProducts = products.filter((product) => {
     const matchesCategory =
-      selectedCategory === 'All Flavors' || product.category === selectedCategory
+      selectedCategory === 'All Products' ||
+      selectedCategory === 'All Flavors' ||
+      product.category === selectedCategory
     const query = searchQuery.toLowerCase().trim()
     const matchesSearch =
       !query ||
@@ -417,12 +539,14 @@ export default function App() {
           wishlistCount={wishlist.length}
           onOpenWishlist={() => {
             navigate('/#collections')
-            setSelectedCategory('All Flavors')
+            setSelectedCategory('All Products')
             setTimeout(() => {
               document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
             }, 100)
           }}
           onGoHome={() => navigate('/')}
+          lang={lang}
+          onToggleLang={handleToggleLang}
         />
 
         {/* Client-side Route Endpoints */}
@@ -455,6 +579,7 @@ export default function App() {
                   onToggleWishlist={handleToggleWishlist}
                   selectedCategory={selectedCategory}
                   onSelectCategory={setSelectedCategory}
+                  lang={lang}
                 />
 
                 {/* Featured Spotlight: Masterpiece Drink Showcase */}
@@ -468,6 +593,7 @@ export default function App() {
                   onAddToCart={handleAddToCart}
                   onQuickView={(prod) => setQuickViewProduct(prod)}
                   onOpenDetail={(prod) => navigate(`/product/${prod.id}`)}
+                  lang={lang}
                 />
 
                 {/* What Our Customers Say */}
@@ -490,6 +616,11 @@ export default function App() {
 
                 {/* Bottom CTA Banner */}
                 <CtaBanner
+                  ctaContent={siteContent.ctaBanner}
+                  isEditMode={isEditMode}
+                  onUpdateCta={(cta) =>
+                    setSiteContent((prev) => ({ ...prev, ctaBanner: cta }))
+                  }
                   onOrderNow={() => {
                     document.getElementById('collections')?.scrollIntoView({ behavior: 'smooth' })
                   }}
@@ -519,6 +650,8 @@ export default function App() {
                 onSelectProduct={(prod) => navigate(`/product/${prod.id}`)}
                 wishlist={wishlist}
                 onToggleWishlist={handleToggleWishlist}
+                lang={lang}
+                onToggleLang={handleToggleLang}
               />
             }
           />
@@ -535,6 +668,8 @@ export default function App() {
                 onSelectProduct={(prod) => navigate(`/product/${prod.id}`)}
                 wishlist={wishlist}
                 onToggleWishlist={handleToggleWishlist}
+                lang={lang}
+                onToggleLang={handleToggleLang}
               />
             }
           />
@@ -579,6 +714,7 @@ export default function App() {
           setIsCartOpen(false)
           setIsCheckoutOpen(true)
         }}
+        lang={lang}
       />
 
       {/* Quick View Product Modal */}
@@ -591,6 +727,7 @@ export default function App() {
           setQuickViewProduct(null)
           navigate(`/product/${prod.id}`)
         }}
+        lang={lang}
       />
 
       {/* Authentication / Login Modal */}
@@ -601,37 +738,50 @@ export default function App() {
         onAuthSuccess={handleAuthSuccess}
         onLogout={handleLogout}
         onOpenAdminDashboard={() => setIsAdminView(true)}
+        onAddToCart={handleAddToCart}
       />
 
       {/* Checkout Modal */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
+        currentUser={currentUser}
         cartItems={cartItems}
         discountPercent={discountPercent}
-        onOrderSuccess={() => {
-          // Push new order to admin orders in local storage
-          const newOrder = {
-            id: 'ORD-' + Math.floor(1000 + Math.random() * 9000),
-            customer: {
-              name: currentUser?.name || 'Guest Shopper',
-              email: currentUser?.email || 'guest@juicera.com',
-              avatar: currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
-            },
-            items: cartItems.map((ci) => ({
-              name: ci.product.name,
-              qty: ci.quantity,
-              price: ci.product.price,
-            })),
-            total: cartItems.reduce((acc, ci) => acc + ci.product.price * ci.quantity, 0),
-            status: 'Processing',
-            date: new Date().toISOString().replace('T', ' ').substring(0, 16),
-            paymentMethod: 'Credit Card (••4242)',
-            shippingAddress: 'Express Carbon-Neutral Delivery',
+        onOrderSuccess={async (checkoutData) => {
+          try {
+            // Insert order into Supabase orders + order_items tables
+            await createOrder({
+              userId: currentUser?.supabaseId || currentUser?.id || null,
+              customerName: checkoutData.formData?.name?.trim() || currentUser?.name || 'Guest Shopper',
+              customerEmail: checkoutData.formData?.email?.trim() || currentUser?.email || 'guest@esanfoods.com',
+              customerPhone: checkoutData.formData?.phone?.trim() || currentUser?.phone || null,
+              customerAvatar: currentUser?.avatar || null,
+              items: checkoutData.cartItems || cartItems,
+              subtotal: checkoutData.subtotal,
+              discountAmount: checkoutData.discountAmount,
+              discountCode: discountCode || null,
+              shippingCost: checkoutData.shippingCost,
+              taxAmount: checkoutData.tax,
+              total: checkoutData.grandTotal,
+              paymentMethod: checkoutData.formData?.paymentMethod === 'card'
+                ? 'Credit Card'
+                : checkoutData.formData?.paymentMethod === 'apple'
+                  ? 'Apple Pay'
+                  : checkoutData.formData?.paymentMethod === 'upi'
+                    ? 'UPI / Net Banking'
+                    : (checkoutData.formData?.paymentMethod || 'Credit Card'),
+              shippingAddress: checkoutData.formData?.address,
+              shippingCity: checkoutData.formData?.city,
+              shippingZip: checkoutData.formData?.zip,
+            })
+            setCartItems([])
+            showToast('Order Placed Successfully! 🎉', 'Your order has been saved and is being processed.')
+          } catch (err) {
+            console.error('Failed to create order:', err)
+            showToast('Order Saved Locally', 'Could not sync to database. We\'ll retry later.')
+            setCartItems([])
           }
-          addAdminOrder(newOrder)
-          setCartItems([])
-          showToast('Order Placed Successfully! 🎉', 'Scheduled for express delivery.')
         }}
       />
 

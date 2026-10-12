@@ -38,13 +38,11 @@ export default function AdminInlineBar({
           {isEditMode ? (
             <>
               <Edit3 size={15} />
-              <span>Edit Mode ON</span>
-              <span className="live-indicator-dot"></span>
+              <span>Edit</span>
             </>
           ) : (
             <>
-              <Eye size={15} />
-              <span>Preview Mode</span>
+              <span>Preview</span>
             </>
           )}
         </button>
@@ -85,7 +83,7 @@ export default function AdminInlineBar({
               ) : (
                 <>
                   <Save size={15} />
-                  <span>Save to Database</span>
+                  <span>Save</span>
                 </>
               )}
             </button>

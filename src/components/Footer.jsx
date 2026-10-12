@@ -23,10 +23,10 @@ export default function Footer({ onSubscribeSuccess }) {
         {/* Newsletter Banner */}
         <div className="footer-newsletter-card">
           <div className="newsletter-text">
-            <span className="newsletter-badge">Join The Clean Drink Club</span>
+            <span className="newsletter-badge">Join The Natural Wellness Club</span>
             <h3 className="newsletter-heading">Unlock 15% Off Your First Pack</h3>
             <p className="newsletter-sub">
-              Be the first to know about seasonal micro-harvest flavors and exclusive member discounts.
+              Be the first to know about seasonal herbal harvests and exclusive member discounts.
             </p>
           </div>
 

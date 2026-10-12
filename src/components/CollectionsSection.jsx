@@ -1,6 +1,11 @@
 import React, { useState } from 'react'
 import { Plus, Minus, Heart, Eye, ShoppingBag, Sparkles, Maximize2 } from 'lucide-react'
 import { CATEGORIES } from '../data/mockData'
+import {
+  getProductName,
+  getProductCategory,
+  getProductBadge,
+} from '../data/tamilService'
 
 export default function CollectionsSection({
   products,
@@ -11,6 +16,7 @@ export default function CollectionsSection({
   onToggleWishlist,
   selectedCategory,
   onSelectCategory,
+  lang = 'en',
 }) {
   // Store local quantity counter for each product card
   const [quantities, setQuantities] = useState({})
@@ -30,6 +36,18 @@ export default function CollectionsSection({
     onAddToCart(product, qty)
   }
 
+  const availableCategories = React.useMemo(() => {
+    const list = ['All Products']
+    const seen = new Set()
+    products.forEach((p) => {
+      if (p.category && !seen.has(p.category.trim())) {
+        seen.add(p.category.trim())
+        list.push(p.category.trim())
+      }
+    })
+    return list
+  }, [products])
+
   return (
     <section className="collections-section" id="collections">
       <div className="section-container">
@@ -37,24 +55,28 @@ export default function CollectionsSection({
         <div className="collections-header text-center">
           <div className="section-pill-tag">
             <Sparkles size={13} />
-            <span>Pure Botanicals</span>
+            <span>{lang === 'ta' ? 'தூய இயற்கை மூலிகைகள்' : 'Pure Botanicals'}</span>
           </div>
-          <h2 className="section-title">DISCOVER OUR COLLECTIONS</h2>
+          <h2 className="section-title">
+            {lang === 'ta' ? 'எங்கள் தயாரிப்புகள்' : 'DISCOVER OUR COLLECTIONS'}
+          </h2>
           <p className="section-subtitle">
-            Every can is cold-pressed, naturally balanced, and sealed for instant peak freshness.
+            {lang === 'ta'
+              ? 'ஒவ்வொரு தயாரிப்பும் பாரம்பரிய இயற்கை முறையில் தயாரிக்கப்பட்டு, ஊட்டச்சத்தோடு அடைக்கப்பட்டுள்ளது.'
+              : 'Every product is traditionally prepared with 100% natural herbs and packed for peak nutrition.'}
           </p>
         </div>
 
         {/* Category Filter Pills */}
         <div className="category-filter-bar">
-          {CATEGORIES.map((cat) => (
+          {availableCategories.map((cat) => (
             <button
               key={cat}
               type="button"
               className={`category-pill ${selectedCategory === cat ? 'active' : ''}`}
               onClick={() => onSelectCategory(cat)}
             >
-              {cat}
+              {getProductCategory(cat, lang)}
             </button>
           ))}
         </div>
@@ -81,23 +103,23 @@ export default function CollectionsSection({
                 {/* Product Image Stage (Cover image with overlay badges) */}
                 <div
                   className="product-image-stage"
-                  aria-label={`View details for ${product.name}`}
+                  aria-label={`View details for ${getProductName(product, lang)}`}
                 >
                   <img
                     src={product.image}
-                    alt={product.name}
+                    alt={getProductName(product, lang)}
                     className="product-can-img"
                     loading="lazy"
                   />
 
                   {/* Overlaid Badges on Image */}
                   <div className="card-image-overlays">
-                    {product.badge ? (
+                    {getProductBadge(product, lang) ? (
                       <span
                         className="product-badge-pill"
                         style={{ borderColor: product.color || '#059669' }}
                       >
-                        {product.badge}
+                        {getProductBadge(product, lang)}
                       </span>
                     ) : (
                       <span />
@@ -112,8 +134,8 @@ export default function CollectionsSection({
                           e.stopPropagation()
                           onQuickView(product)
                         }}
-                        aria-label={`Open quick view modal for ${product.name}`}
-                        title="Expand as Modal"
+                        aria-label={`Open quick view modal for ${getProductName(product, lang)}`}
+                        title={lang === 'ta' ? 'மாதிரியாக விரி' : 'Expand as Modal'}
                       >
                         <Maximize2 size={14} />
                       </button>
@@ -126,8 +148,8 @@ export default function CollectionsSection({
                           e.stopPropagation()
                           onToggleWishlist(product.id)
                         }}
-                        aria-label={`Save ${product.name} to wishlist`}
-                        title="Add to Wishlist"
+                        aria-label={`Save ${getProductName(product, lang)} to wishlist`}
+                        title={lang === 'ta' ? 'விருப்பப்பட்டியலில் சேர்' : 'Add to Wishlist'}
                       >
                         <Heart
                           size={14}
@@ -144,23 +166,23 @@ export default function CollectionsSection({
                 {/* Product Info */}
                 <div className="product-info-wrap">
                   <div className="product-cat-vol-row">
-                    <span className="product-cat-pill">{product.category}</span>
+                    <span className="product-cat-pill">{getProductCategory(product.category, lang)}</span>
                     <span className="product-dot-sep">•</span>
                     <span className="product-vol-pill">{product.volume}</span>
                   </div>
 
-                  <h3 className="product-card-name" title={product.name}>
-                    {product.name}
+                  <h3 className="product-card-name" title={getProductName(product, lang)}>
+                    {getProductName(product, lang)}
                   </h3>
 
                   {/* Price Row */}
                   <div className="product-price-display-row">
                     <span className="product-curr-price">
-                      ${Number(product.price).toFixed(2)}
+                      ₹{Number(product.price).toFixed(2)}
                     </span>
                     {product.originalPrice && (
                       <span className="product-orig-price">
-                        ${Number(product.originalPrice).toFixed(2)}
+                        ₹{Number(product.originalPrice).toFixed(2)}
                       </span>
                     )}
                   </div>
@@ -198,10 +220,10 @@ export default function CollectionsSection({
                       type="button"
                       className="add-to-cart-pill-btn"
                       onClick={() => handleAddToCart(product)}
-                      aria-label={`Add to Cart for $${totalPrice}`}
+                      aria-label={`Add to Cart for ₹${totalPrice}`}
                     >
                       <ShoppingBag size={14} />
-                      <span>Add • ${totalPrice}</span>
+                      <span>{lang === 'ta' ? 'சேர்' : 'Add'} • ₹{totalPrice}</span>
                     </button>
                   </div>
 
@@ -214,10 +236,10 @@ export default function CollectionsSection({
                       type="button"
                       className="mobile-quick-add-btn"
                       onClick={() => handleAddToCart(product)}
-                      aria-label={`Add ${product.name} to Cart`}
+                      aria-label={`Add ${getProductName(product, lang)} to Cart`}
                     >
                       <ShoppingBag size={14} />
-                      <span>Add to Bag</span>
+                      <span>{lang === 'ta' ? 'கூடையில் சேர்க்க' : 'Add to Bag'}</span>
                     </button>
                   </div>
 
@@ -232,7 +254,7 @@ export default function CollectionsSection({
                         else onQuickView(product)
                       }}
                     >
-                      View Detailed Screen →
+                      {lang === 'ta' ? 'முழு விவரங்கள் பார்க்க →' : 'View Detailed Screen →'}
                     </button>
                   </div>
                 </div>

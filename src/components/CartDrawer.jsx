@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { X, Trash2, Plus, Minus, ArrowRight, ShoppingBag, Sparkles, Tag, Check } from 'lucide-react'
+import { getProductName } from '../data/tamilService'
 
 export default function CartDrawer({
   isOpen,
@@ -11,6 +12,7 @@ export default function CartDrawer({
   discountCode,
   discountPercent,
   onApplyDiscount,
+  lang = 'en',
 }) {
   const [promoInput, setPromoInput] = useState('')
   const [promoError, setPromoError] = useState('')
@@ -19,7 +21,7 @@ export default function CartDrawer({
 
   // Calculate pricing
   const subtotal = cartItems.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
+    (sum, item) => sum + (Number(item.price ?? item.product.price) || 0) * item.quantity,
     0
   )
   const discountAmount = subtotal * (discountPercent / 100)
@@ -59,9 +61,12 @@ export default function CartDrawer({
         <div className="cart-drawer-header">
           <div className="cart-title-wrap">
             <ShoppingBag size={20} className="cart-title-icon" />
-            <h3 className="cart-drawer-title">Your Fresh Box</h3>
+            <h3 className="cart-drawer-title">
+              {lang === 'ta' ? 'உங்கள் கூடை' : 'Your Fresh Box'}
+            </h3>
             <span className="cart-count-pill">
-              {cartItems.reduce((acc, item) => acc + item.quantity, 0)} items
+              {cartItems.reduce((acc, item) => acc + item.quantity, 0)}{' '}
+              {lang === 'ta' ? 'பொருட்கள்' : 'items'}
             </span>
           </div>
           <button
@@ -79,11 +84,13 @@ export default function CartDrawer({
           <div className="meter-text">
             {isFreeShipping && cartItems.length > 0 ? (
               <span className="free-shipping-unlocked">
-                🎉 You've unlocked <strong>FREE Carbon-Neutral Shipping</strong>!
+                🎉 {lang === 'ta' ? 'இலவச டெலிவரி கிடைத்துள்ளது!' : "You've unlocked FREE Carbon-Neutral Shipping!"}
               </span>
             ) : (
               <span>
-                Add <strong>${amountToFreeShipping}</strong> more for <strong>FREE Shipping</strong>
+                {lang === 'ta'
+                  ? `இலவச டெலிவரிக்கு இன்னும் ₹${amountToFreeShipping} சேர்க்கவும்`
+                  : `Add ₹${amountToFreeShipping} more for FREE Shipping`}
               </span>
             )}
           </div>
@@ -102,74 +109,86 @@ export default function CartDrawer({
               <div className="empty-icon-wrap">
                 <ShoppingBag size={48} />
               </div>
-              <h4>Your box is currently empty</h4>
-              <p>Add some fresh cold-pressed goodness to recharge your day!</p>
+              <h4>{lang === 'ta' ? 'உங்கள் கூடை காலியாக உள்ளது' : 'Your box is currently empty'}</h4>
+              <p>
+                {lang === 'ta'
+                  ? 'ஆரோக்கியமான மூலிகைப் பொருட்களைத் தேர்வு செய்து கூடையில் சேர்க்கவும்!'
+                  : 'Add some fresh cold-pressed goodness to recharge your day!'}
+              </p>
               <button
                 type="button"
                 className="btn-pill-primary"
                 onClick={onClose}
               >
-                <span>Browse Flavors</span>
+                <span>{lang === 'ta' ? 'பொருட்களைப் பார்க்க' : 'Browse Products'}</span>
               </button>
             </div>
           ) : (
             <div className="cart-items-list">
-              {cartItems.map((item) => (
-                <div key={item.product.id} className="cart-item-row">
-                  <div className="cart-item-thumb">
-                    <img src={item.product.image} alt={item.product.name} />
-                  </div>
-                  <div className="cart-item-details">
-                    <div className="cart-item-meta">
-                      <h4 className="cart-item-name">{item.product.name}</h4>
-                      <span className="cart-item-volume">{item.product.volume}</span>
-                    </div>
-                    <div className="cart-item-pricing">
-                      <span className="cart-item-price">
-                        ${(item.product.price * item.quantity).toFixed(2)}
-                      </span>
-                      <span className="cart-unit-price">
-                        (${item.product.price.toFixed(2)} each)
-                      </span>
-                    </div>
+              {cartItems.map((item) => {
+                const itemKey = item.cartItemId || item.product.id
+                const effectivePrice = Number(item.price ?? item.product.price) || 0
+                const packLabel = item.selectedOption?.title
+                  ? `${item.selectedOption.title}${item.selectedOption.size ? ` • ${item.selectedOption.size}` : ''}`
+                  : item.product.volume
 
-                    {/* Stepper & Delete */}
-                    <div className="cart-item-controls">
-                      <div className="stepper-pill cart-stepper">
-                        <button
-                          type="button"
-                          className="stepper-btn"
-                          onClick={() => onUpdateQty(item.product.id, -1)}
-                          aria-label="Decrease quantity"
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span className="stepper-value">
-                          {String(item.quantity).padStart(2, '0')}
+                return (
+                  <div key={itemKey} className="cart-item-row">
+                    <div className="cart-item-thumb">
+                      <img src={item.product.image} alt={getProductName(item.product, lang)} />
+                    </div>
+                    <div className="cart-item-details">
+                      <div className="cart-item-meta">
+                        <h4 className="cart-item-name">{getProductName(item.product, lang)}</h4>
+                        <span className="cart-item-volume">{packLabel}</span>
+                      </div>
+                      <div className="cart-item-pricing">
+                        <span className="cart-item-price">
+                          ₹{(effectivePrice * item.quantity).toFixed(2)}
                         </span>
-                        <button
-                          type="button"
-                          className="stepper-btn"
-                          onClick={() => onUpdateQty(item.product.id, 1)}
-                          aria-label="Increase quantity"
-                        >
-                          <Plus size={12} />
-                        </button>
+                        <span className="cart-unit-price">
+                          (₹{effectivePrice.toFixed(2)} {lang === 'ta' ? 'ஒவ்வொன்றும்' : 'each'})
+                        </span>
                       </div>
 
-                      <button
-                        type="button"
-                        className="cart-remove-btn"
-                        onClick={() => onRemoveItem(item.product.id)}
-                        aria-label={`Remove ${item.product.name} from cart`}
-                        title="Remove"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      {/* Stepper & Delete */}
+                      <div className="cart-item-controls">
+                        <div className="stepper-pill cart-stepper">
+                          <button
+                            type="button"
+                            className="stepper-btn"
+                            onClick={() => onUpdateQty(itemKey, -1)}
+                            aria-label="Decrease quantity"
+                          >
+                            <Minus size={12} />
+                          </button>
+                          <span className="stepper-value">
+                            {String(item.quantity).padStart(2, '0')}
+                          </span>
+                          <button
+                            type="button"
+                            className="stepper-btn"
+                            onClick={() => onUpdateQty(itemKey, 1)}
+                            aria-label="Increase quantity"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="cart-remove-btn"
+                          onClick={() => onRemoveItem(itemKey)}
+                          aria-label={`Remove ${getProductName(item.product, lang)} from cart`}
+                          title="Remove"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
@@ -203,26 +222,26 @@ export default function CartDrawer({
             {/* Calculations Breakdown */}
             <div className="cart-calculations-table">
               <div className="calc-row">
-                <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>{lang === 'ta' ? 'மொத்த மதிப்பு' : 'Subtotal'}</span>
+                <span>₹{subtotal.toFixed(2)}</span>
               </div>
               {discountPercent > 0 && (
                 <div className="calc-row discount-row">
-                  <span>Discount ({discountPercent}%)</span>
-                  <span>-${discountAmount.toFixed(2)}</span>
+                  <span>{lang === 'ta' ? 'தள்ளுபடி' : 'Discount'} ({discountPercent}%)</span>
+                  <span>-₹{discountAmount.toFixed(2)}</span>
                 </div>
               )}
               <div className="calc-row">
-                <span>Carbon-Neutral Shipping</span>
-                <span>{shippingCost === 0 ? <strong className="free-text">FREE</strong> : `$${shippingCost.toFixed(2)}`}</span>
+                <span>{lang === 'ta' ? 'சுற்றுச்சூழல் நட்பு டெலிவரி' : 'Carbon-Neutral Shipping'}</span>
+                <span>{shippingCost === 0 ? <strong className="free-text">{lang === 'ta' ? 'இலவசம்' : 'FREE'}</strong> : `₹${shippingCost.toFixed(2)}`}</span>
               </div>
               <div className="calc-row">
-                <span>Estimated Tax (8%)</span>
-                <span>${tax.toFixed(2)}</span>
+                <span>{lang === 'ta' ? 'வரி (8%)' : 'Estimated Tax (8%)'}</span>
+                <span>₹{tax.toFixed(2)}</span>
               </div>
               <div className="calc-row total-row">
-                <span>Total</span>
-                <span>${grandTotal.toFixed(2)}</span>
+                <span>{lang === 'ta' ? 'இறுதித் தொகை' : 'Total'}</span>
+                <span>₹{grandTotal.toFixed(2)}</span>
               </div>
             </div>
 
@@ -233,7 +252,7 @@ export default function CartDrawer({
               onClick={onCheckout}
               id="cart-checkout-btn"
             >
-              <span>Proceed to Checkout</span>
+              <span>{lang === 'ta' ? 'ஆர்டர் செய்ய தொடரவும்' : 'Proceed to Checkout'}</span>
               <ArrowRight size={16} />
             </button>
           </div>

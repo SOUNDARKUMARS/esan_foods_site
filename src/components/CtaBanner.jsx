@@ -1,20 +1,61 @@
-import React from 'react'
 import { ArrowRight, Truck, Sparkles } from 'lucide-react'
 import { citrusBanner } from '../data/mockData'
+import { EditableText, EditableImage } from './Editable'
+import { BUCKETS } from '../data/storageService'
 
-export default function CtaBanner({ onOrderNow }) {
+export default function CtaBanner({
+  ctaContent = {},
+  isEditMode = false,
+  onUpdateCta,
+  onOrderNow,
+}) {
+  const content = {
+    tagline: 'Eat Pure, Live Healthy.',
+    headline: 'Ready To Nourish Your Health?',
+    subheadline:
+      'Experience Traditional Wellness, Clean Natural Ingredients, And Pure Nutrition.',
+    buttonText: 'Order Now',
+    shippingNotice: 'Free Express Shipping On Orders Over ₹50',
+    backgroundImage: '',
+    ...ctaContent,
+  }
+
+  const updateField = (key, value) => {
+    if (onUpdateCta) {
+      onUpdateCta({
+        ...content,
+        [key]: value,
+      })
+    }
+  }
+
+  const bgImageSrc = content.backgroundImage || citrusBanner
+
   return (
     <section className="cta-banner-section">
       <div className="section-container">
         <div className="cta-banner-card">
-          {/* Background image overlay */}
+          {/* Background image overlay with Admin Live Editing */}
           <div className="cta-banner-bg-wrap">
-            <img
-              src={citrusBanner}
-              alt="Sparkling citrus lime refreshment banner"
-              className="cta-banner-bg-img"
-              loading="lazy"
-            />
+            {isEditMode ? (
+              <EditableImage
+                src={bgImageSrc}
+                alt="CTA background banner"
+                className="cta-banner-bg-img"
+                wrapperClassName="cta-banner-editable-bg"
+                isEditMode={isEditMode}
+                bucket={BUCKETS.SITE_ASSETS}
+                folder="banner"
+                onChange={(newUrl) => updateField('backgroundImage', newUrl)}
+              />
+            ) : (
+              <img
+                src={bgImageSrc}
+                alt="Sparkling citrus lime refreshment banner"
+                className="cta-banner-bg-img"
+                loading="lazy"
+              />
+            )}
             <div className="cta-banner-gradient-overlay"></div>
           </div>
 
@@ -22,15 +63,34 @@ export default function CtaBanner({ onOrderNow }) {
           <div className="cta-banner-content">
             <div className="cta-tagline">
               <Sparkles size={14} />
-              <span>Drink Fresh, Live Better.</span>
+              <EditableText
+                value={content.tagline}
+                onChange={(val) => updateField('tagline', val)}
+                isEditMode={isEditMode}
+                as="span"
+                placeholder="Tagline..."
+              />
             </div>
 
             <h2 className="cta-headline">
-              Ready To Refresh Your Day?
+              <EditableText
+                value={content.headline}
+                onChange={(val) => updateField('headline', val)}
+                isEditMode={isEditMode}
+                as="span"
+                placeholder="Headline..."
+              />
             </h2>
 
             <p className="cta-subheadline">
-              Experience Bold Flavor, Clean Ingredients, And Pure Refreshment.
+              <EditableText
+                value={content.subheadline}
+                onChange={(val) => updateField('subheadline', val)}
+                isEditMode={isEditMode}
+                as="span"
+                multiline={true}
+                placeholder="Subheadline description..."
+              />
             </p>
 
             <div className="cta-action-row">
@@ -40,14 +100,26 @@ export default function CtaBanner({ onOrderNow }) {
                 onClick={onOrderNow}
                 id="cta-order-now-btn"
               >
-                <span>Order Now</span>
+                <EditableText
+                  value={content.buttonText}
+                  onChange={(val) => updateField('buttonText', val)}
+                  isEditMode={isEditMode}
+                  as="span"
+                  placeholder="Button label..."
+                />
                 <ArrowRight size={16} />
               </button>
             </div>
 
             <div className="cta-shipping-notice">
               <Truck size={14} />
-              <span>Free Express Shipping On Orders Over $50</span>
+              <EditableText
+                value={content.shippingNotice}
+                onChange={(val) => updateField('shippingNotice', val)}
+                isEditMode={isEditMode}
+                as="span"
+                placeholder="Shipping notice..."
+              />
             </div>
           </div>
         </div>

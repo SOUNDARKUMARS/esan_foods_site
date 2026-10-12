@@ -5,7 +5,9 @@ const AUTH_STORAGE_KEY = 'juicera_auth_session'
 // Automatically wipe any legacy dummy mock session
 try {
   localStorage.removeItem(AUTH_STORAGE_KEY)
-} catch (e) {}
+} catch {
+  // Ignore
+}
 
 // Format Supabase user into application profile (fallback formatter)
 export function formatUserFromSupabase(sbUser) {
@@ -23,11 +25,7 @@ export function formatUserFromSupabase(sbUser) {
       'Juicera Member',
     email: sbUser.email || email,
     role: isAdmin ? 'admin' : (sbUser.user_metadata?.role || 'user'),
-    avatar:
-      sbUser.user_metadata?.avatar_url ||
-      (isAdmin
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
-        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80'),
+    avatar: sbUser.user_metadata?.avatar_url || null,
     phone: sbUser.user_metadata?.phone || '',
     loyaltyPoints: 50,
     supabaseSession: true,
@@ -58,12 +56,7 @@ export async function syncUserProfile(sbUser) {
         name: profile.full_name || sbUser.user_metadata?.full_name || email.split('@')[0] || 'Juicera Member',
         email: profile.email || email,
         role: isAdmin ? 'admin' : (profile.role || 'user'),
-        avatar:
-          profile.avatar_url ||
-          sbUser.user_metadata?.avatar_url ||
-          (isAdmin
-            ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
-            : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80'),
+        avatar: profile.avatar_url || sbUser.user_metadata?.avatar_url || null,
         phone: profile.phone || '',
         loyaltyPoints: profile.loyalty_points ?? 50,
         supabaseSession: true,
@@ -81,11 +74,7 @@ export async function syncUserProfile(sbUser) {
         sbUser.user_metadata?.full_name ||
         (isNewAdmin ? 'System Administrator' : email.split('@')[0]) ||
         'Juicera Member',
-      avatar_url:
-        sbUser.user_metadata?.avatar_url ||
-        (isNewAdmin
-          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
-          : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80'),
+      avatar_url: sbUser.user_metadata?.avatar_url || null,
       role: isNewAdmin ? 'admin' : 'user',
       loyalty_points: 50,
     }
@@ -119,7 +108,7 @@ export async function syncUserProfile(sbUser) {
 export async function clearSession() {
   try {
     localStorage.removeItem(AUTH_STORAGE_KEY)
-  } catch (e) {
+  } catch {
     // Ignore storage errors
   }
   try {
@@ -127,7 +116,7 @@ export async function clearSession() {
     if (data?.session) {
       await supabase.auth.signOut()
     }
-  } catch (e) {
+  } catch {
     // Ignore sign out errors
   }
 }
@@ -148,18 +137,213 @@ export async function verifyCurrentSupabaseSession() {
       session: data.session,
       isAdmin: appUser?.role === 'admin',
     }
-  } catch (err) {
+  } catch {
     return null
   }
 }
 
 // -------------------------------------------------------------
-// SUPABASE EMAIL OTP AUTHENTICATION
+// EMAIL & PASSWORD AUTHENTICATION (NO OTP FOR RETURNING USERS)
+// -------------------------------------------------------------
+
+// 1. Sign In with Email & Password (Direct login, no OTP required)
+export async function signInWithEmailPassword(email, password) {
+  const cleanEmail = (email || '').trim().toLowerCase()
+  const cleanPassword = (password || '').trim()
+
+  if (!cleanEmail || !cleanPassword) {
+    return { success: false, error: 'Please enter both your email and password.' }
+  }
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: cleanPassword,
+    })
+
+    if (error) {
+      const msg = error.message || ''
+      if (msg.toLowerCase().includes('email not confirmed')) {
+        return {
+          success: false,
+          unconfirmed: true,
+          error: 'Your email has not been verified yet. Please verify your OTP code to complete registration.',
+        }
+      }
+      if (msg.toLowerCase().includes('invalid login credentials')) {
+        return {
+          success: false,
+          error: 'Invalid email or password. Please check your credentials or create an account.',
+        }
+      }
+      return { success: false, error: msg }
+    }
+
+    const appUser = await syncUserProfile(data.user)
+    return {
+      success: true,
+      user: appUser,
+      session: data.session,
+      isAdmin: appUser?.role === 'admin',
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || 'Unable to sign in. Please try again.',
+    }
+  }
+}
+
+// 2. Register with Full Name, Email, and Password (Triggers verification OTP)
+export async function registerWithEmailPassword(fullName, email, password) {
+  const cleanName = (fullName || '').trim()
+  const cleanEmail = (email || '').trim().toLowerCase()
+  const cleanPassword = (password || '').trim()
+
+  if (!cleanEmail || !cleanPassword) {
+    return { success: false, error: 'Email and password are required.' }
+  }
+  if (cleanPassword.length < 6) {
+    return { success: false, error: 'Password must be at least 6 characters.' }
+  }
+
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password: cleanPassword,
+      options: {
+        data: {
+          full_name: cleanName || cleanEmail.split('@')[0],
+        },
+      },
+    })
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    // Supabase returns an empty identities array if the user is already registered
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return {
+        success: false,
+        error: 'An account with this email already exists. Please sign in with your password instead.',
+      }
+    }
+
+    // If session is already created immediately (e.g. if email confirmation is turned off in project)
+    if (data?.session) {
+      const appUser = await syncUserProfile(data.user)
+      return {
+        success: true,
+        needsOtp: false,
+        user: appUser,
+        session: data.session,
+        isAdmin: appUser?.role === 'admin',
+      }
+    }
+
+    // Verification code sent to email
+    return {
+      success: true,
+      needsOtp: true,
+      message: `Verification code sent to ${cleanEmail}. Please enter it below to activate your account.`,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || 'Registration failed. Please try again.',
+    }
+  }
+}
+
+// 3. Verify Registration OTP
+export async function verifySignupOtp(email, token) {
+  const cleanEmail = (email || '').trim().toLowerCase()
+  const cleanToken = (token || '').trim()
+
+  if (!cleanEmail || !cleanToken) {
+    return { success: false, error: 'Email and verification code are required.' }
+  }
+
+  try {
+    // Attempt verification with type 'signup'
+    let res = await supabase.auth.verifyOtp({
+      email: cleanEmail,
+      token: cleanToken,
+      type: 'signup',
+    })
+
+    // If 'signup' fails, attempt fallback with type 'email'
+    if (res.error) {
+      const fallback = await supabase.auth.verifyOtp({
+        email: cleanEmail,
+        token: cleanToken,
+        type: 'email',
+      })
+      if (!fallback.error) {
+        res = fallback
+      }
+    }
+
+    if (res.error) {
+      return {
+        success: false,
+        error: res.error.message || 'Invalid or expired verification code.',
+      }
+    }
+
+    const appUser = await syncUserProfile(res.data.user)
+    return {
+      success: true,
+      user: appUser,
+      session: res.data.session,
+      isAdmin: appUser?.role === 'admin',
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || 'OTP verification failed.',
+    }
+  }
+}
+
+// 4. Resend Registration OTP
+export async function resendSignupOtp(email) {
+  const cleanEmail = (email || '').trim().toLowerCase()
+  if (!cleanEmail) {
+    return { success: false, error: 'Email address is required.' }
+  }
+
+  try {
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: cleanEmail,
+    })
+
+    if (error) {
+      // Fallback to sending OTP directly
+      return await sendSupabaseEmailOtp(cleanEmail)
+    }
+
+    return {
+      success: true,
+      message: `A fresh verification code has been dispatched to ${cleanEmail}.`,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || 'Failed to resend code.',
+    }
+  }
+}
+
+// -------------------------------------------------------------
+// SUPABASE EMAIL OTP AUTHENTICATION (FOR PASSWORDLESS / RECOVERY)
 // -------------------------------------------------------------
 
 // 1. Send OTP to email via Supabase signInWithOtp
 export async function sendSupabaseEmailOtp(email) {
-  const cleanEmail = (email || '').trim()
+  const cleanEmail = (email || '').trim().toLowerCase()
   if (!cleanEmail) {
     return { success: false, error: 'Email address is required.' }
   }
@@ -191,7 +375,7 @@ export async function sendSupabaseEmailOtp(email) {
 
 // 2. Verify Supabase Email OTP code
 export async function verifySupabaseEmailOtp(email, token) {
-  const cleanEmail = (email || '').trim()
+  const cleanEmail = (email || '').trim().toLowerCase()
   const cleanToken = (token || '').trim()
 
   if (!cleanEmail || !cleanToken) {
@@ -223,3 +407,4 @@ export async function verifySupabaseEmailOtp(email, token) {
     }
   }
 }
+

@@ -13,6 +13,8 @@ export default function Navbar({
   wishlistCount,
   onOpenWishlist,
   onGoHome,
+  lang = 'en',
+  onToggleLang,
 }) {
   const [showSearch, setShowSearch] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -34,34 +36,65 @@ export default function Navbar({
           <img src={esanLogo} alt="Esan Foods Logo" className="brand-logo-img" />
           <div className="logo-text-wrap">
             <span className="brand-name">Esan Foods</span>
-            <span className="brand-badge">100% Natural & Healthy</span>
+            <span className="brand-badge">
+              {lang === 'ta' ? '100% இயற்கை & ஆரோக்கியமானது' : '100% Natural & Healthy'}
+            </span>
           </div>
         </a>
 
         {/* Desktop Navigation Links */}
         <nav className="desktop-nav" aria-label="Main Navigation">
           <a href="#home" className="nav-link active" onClick={handleHomeClick}>
-            Home
+            {lang === 'ta' ? 'முகப்பு' : 'Home'}
           </a>
           <div className="nav-dropdown-trigger">
             <a href="#collections" className="nav-link">
-              Shop <ChevronDown size={14} className="dropdown-arrow" />
+              {lang === 'ta' ? 'பொருட்கள்' : 'Shop'}{' '}
+              <ChevronDown size={14} className="dropdown-arrow" />
             </a>
             <div className="nav-dropdown-menu">
-              <a href="#collections">All Products</a>
-              <a href="#collections">Herbal Powders</a>
-              <a href="#collections">Natural Boosters</a>
-              <a href="#spotlight">Featured Spotlight</a>
+              <a href="#collections">{lang === 'ta' ? 'அனைத்து தயாரிப்புகள்' : 'All Products'}</a>
+              <a href="#collections">{lang === 'ta' ? 'மூலிகைப் பொடிகள்' : 'Herbal Powders'}</a>
+              <a href="#collections">{lang === 'ta' ? 'இயற்கை தயாரிப்புகள்' : 'Natural Boosters'}</a>
+              <a href="#spotlight">{lang === 'ta' ? 'சிறப்புத் தேர்வு' : 'Featured Spotlight'}</a>
             </div>
           </div>
-          <a href="#spotlight" className="nav-link">Product</a>
-          <a href="#reviews" className="nav-link">Reviews</a>
-          <a href="#benefits" className="nav-link">Why Esan Foods</a>
-          <a href="#faq" className="nav-link">FAQ</a>
+          <a href="#spotlight" className="nav-link">
+            {lang === 'ta' ? 'தயாரிப்பு' : 'Product'}
+          </a>
+          <a href="#reviews" className="nav-link">
+            {lang === 'ta' ? 'மதிப்புரைகள்' : 'Reviews'}
+          </a>
+          <a href="#benefits" className="nav-link">
+            {lang === 'ta' ? 'ஏன் ஈசன் புட்ஸ்' : 'Why Esan Foods'}
+          </a>
+          <a href="#faq" className="nav-link">
+            {lang === 'ta' ? 'கேள்விகள்' : 'FAQ'}
+          </a>
         </nav>
 
         {/* Right Action Icons */}
         <div className="header-actions">
+          {/* Language Switcher Pill (Desktop) */}
+          <div className="nav-lang-pill-wrapper" title="Change Language / மொழியை மாற்றുക">
+            <button
+              type="button"
+              className={`nav-lang-btn ${lang === 'en' ? 'active' : ''}`}
+              onClick={() => onToggleLang && onToggleLang('en')}
+              title="English"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              className={`nav-lang-btn ${lang === 'ta' ? 'active' : ''}`}
+              onClick={() => onToggleLang && onToggleLang('ta')}
+              title="தமிழ்"
+            >
+              தமிழ்
+            </button>
+          </div>
+
           {/* Search Trigger */}
           <div className="search-wrap">
             {showSearch ? (
@@ -69,7 +102,9 @@ export default function Navbar({
                 <Search size={16} className="search-box-icon" />
                 <input
                   type="text"
-                  placeholder="Search flavors, fruits..."
+                  placeholder={
+                    lang === 'ta' ? 'பொருட்கள், மூலிகைகளைத் தேடுங்கள்...' : 'Search herbal powders, products...'
+                  }
                   value={searchQuery}
                   onChange={(e) => onSearchChange(e.target.value)}
                   autoFocus
@@ -88,8 +123,8 @@ export default function Navbar({
                 type="button"
                 className="icon-btn"
                 onClick={() => setShowSearch(true)}
-                aria-label="Search drinks"
-                title="Search"
+                aria-label="Search products"
+                title={lang === 'ta' ? 'தேடுக' : 'Search'}
               >
                 <Search size={19} />
               </button>
@@ -102,7 +137,7 @@ export default function Navbar({
             className="icon-btn wishlist-btn"
             onClick={onOpenWishlist}
             aria-label="View Wishlist"
-            title="Favorites"
+            title={lang === 'ta' ? 'விருப்பப்பட்டியல்' : 'Favorites'}
           >
             <Heart size={19} className={wishlistCount > 0 ? 'heart-active' : ''} />
             {wishlistCount > 0 && (
@@ -135,7 +170,7 @@ export default function Navbar({
                   title="Open Admin Dashboard"
                 >
                   <span className="admin-badge-dot"></span>
-                  <span>Admin Panel</span>
+                  <span>{lang === 'ta' ? 'நிர்வாகம்' : 'Admin Panel'}</span>
                 </button>
               )}
               <button
@@ -155,7 +190,7 @@ export default function Navbar({
               id="login-btn"
             >
               <User size={15} />
-              <span>Login</span>
+              <span>{lang === 'ta' ? 'உள்நுழைக' : 'Login'}</span>
             </button>
           )}
 
@@ -174,6 +209,33 @@ export default function Navbar({
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
         <div className="mobile-nav-panel animate-fade-in">
+          {/* Mobile Language Switcher Row */}
+          <div className="mobile-nav-lang-bar">
+            <span className="mobile-lang-label">
+              {lang === 'ta' ? 'மொழி தேர்வு:' : 'Language:'}
+            </span>
+            <div className="nav-lang-pill-wrapper">
+              <button
+                type="button"
+                className={`nav-lang-btn ${lang === 'en' ? 'active' : ''}`}
+                onClick={() => {
+                  if (onToggleLang) onToggleLang('en')
+                }}
+              >
+                English
+              </button>
+              <button
+                type="button"
+                className={`nav-lang-btn ${lang === 'ta' ? 'active' : ''}`}
+                onClick={() => {
+                  if (onToggleLang) onToggleLang('ta')
+                }}
+              >
+                தமிழ்
+              </button>
+            </div>
+          </div>
+
           {user?.role === 'admin' && (
             <button
               type="button"
@@ -184,7 +246,7 @@ export default function Navbar({
               }}
             >
               <Shield size={16} className="text-emerald-400" />
-              <span>Launch Admin Console</span>
+              <span>{lang === 'ta' ? 'நிர்வாக பலகை திற' : 'Launch Admin Console'}</span>
             </button>
           )}
           <a
@@ -194,7 +256,7 @@ export default function Navbar({
               setMobileMenuOpen(false)
             }}
           >
-            Home
+            {lang === 'ta' ? 'முகப்பு' : 'Home'}
           </a>
           <a
             href="#collections"
@@ -203,12 +265,20 @@ export default function Navbar({
               setMobileMenuOpen(false)
             }}
           >
-            Shop Collections
+            {lang === 'ta' ? 'தயாரிப்புகள் பட்டியல்' : 'Shop Collections'}
           </a>
-          <a href="#spotlight" onClick={() => setMobileMenuOpen(false)}>Featured Product</a>
-          <a href="#reviews" onClick={() => setMobileMenuOpen(false)}>Customer Reviews</a>
-          <a href="#benefits" onClick={() => setMobileMenuOpen(false)}>Why You'll Love It</a>
-          <a href="#faq" onClick={() => setMobileMenuOpen(false)}>Frequently Asked Questions</a>
+          <a href="#spotlight" onClick={() => setMobileMenuOpen(false)}>
+            {lang === 'ta' ? 'சிறப்புத் தேர்வு' : 'Featured Product'}
+          </a>
+          <a href="#reviews" onClick={() => setMobileMenuOpen(false)}>
+            {lang === 'ta' ? 'வாடிக்கையாளர் மதிப்புரைகள்' : 'Customer Reviews'}
+          </a>
+          <a href="#benefits" onClick={() => setMobileMenuOpen(false)}>
+            {lang === 'ta' ? 'ஏன் ஈசன் புட்ஸ்' : "Why You'll Love It"}
+          </a>
+          <a href="#faq" onClick={() => setMobileMenuOpen(false)}>
+            {lang === 'ta' ? 'அடிக்கடி கேட்கப்படும் கேள்விகள்' : 'Frequently Asked Questions'}
+          </a>
 
           <div className="mobile-drawer-footer">
             {user ? (
@@ -221,7 +291,9 @@ export default function Navbar({
                 }}
               >
                 <User size={15} />
-                <span>Account ({user.name.split(' ')[0]})</span>
+                <span>
+                  {lang === 'ta' ? 'கணக்கு' : 'Account'} ({user.name.split(' ')[0]})
+                </span>
               </button>
             ) : (
               <button
@@ -233,7 +305,7 @@ export default function Navbar({
                 }}
               >
                 <User size={15} />
-                <span>Sign In / Register</span>
+                <span>{lang === 'ta' ? 'உள்நுழைக / பதிவு செய்க' : 'Sign In / Register'}</span>
               </button>
             )}
           </div>

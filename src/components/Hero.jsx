@@ -21,58 +21,49 @@ export default function Hero({
   return (
     <section className="hero-section" id="home">
       <div className="hero-card">
-        {/* Decorative ambient glow */}
-        <div className="hero-ambient-glow" aria-hidden="true"></div>
-
         <div className="hero-grid">
           {/* Left Column: Text & CTAs */}
           <div className="hero-content">
-            {/* Main Headline with Top Row containing line 1 + Rating Badge on opposite right */}
-            <h1 className="hero-headline">
-              <div className="hero-headline-top-bar">
-                <span className="hero-headline-first-line">
-                  <EditableText
-                    value={heroContent.headlineLine1 || 'FEEL THE'}
-                    onChange={(val) => updateField('headlineLine1', val)}
-                    isEditMode={isEditMode}
-                    as="span"
-                  />
-                </span>
+            {/* Headline Top Bar containing line 1 + Rating Badge on opposite right */}
+            <div className="hero-headline-top-bar">
+              <span className="hero-headline-first-line">
+                <EditableText
+                  value={heroContent.headlineLine1 || 'FEEL THE'}
+                  onChange={(val) => updateField('headlineLine1', val)}
+                  isEditMode={isEditMode}
+                  as="span"
+                />
+              </span>
 
-                {/* Rating Badge in the right corner, opposite to the first line */}
-                <div className="hero-review-badge">
-                  <div className="reviewer-avatar-stack">
-                    <img
-                      src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&q=80"
-                      alt="Reviewer"
-                      className="badge-avatar"
-                    />
-                  </div>
-                  <div className="badge-rating-info">
-                    <div className="badge-stars">
-                      <Star size={13} className="star-filled" fill="currentColor" />
-                      <EditableText
-                        value={heroContent.badgeReviewScore || '4.9/5'}
-                        onChange={(val) => updateField('badgeReviewScore', val)}
-                        isEditMode={isEditMode}
-                        as="span"
-                        className="rating-score"
-                      />
-                    </div>
+              {/* Rating Badge in the right corner, opposite to the first line */}
+              <div className="hero-review-badge" aria-label="Customer review rating">
+                <div className="badge-rating-info">
+                  <div className="badge-stars">
+                    <Star size={14} className="star-filled" fill="currentColor" />
                     <EditableText
-                      value={heroContent.badgeReviewCount || '18,130 (Reviews)'}
-                      onChange={(val) => updateField('badgeReviewCount', val)}
+                      value={heroContent.badgeReviewScore || '4.9/5'}
+                      onChange={(val) => updateField('badgeReviewScore', val)}
                       isEditMode={isEditMode}
                       as="span"
-                      className="reviews-count"
+                      className="rating-score"
                     />
                   </div>
+                  <span className="rating-dot-separator" aria-hidden="true">•</span>
+                  <EditableText
+                    value={heroContent.badgeReviewCount || '18,130 (Reviews)'}
+                    onChange={(val) => updateField('badgeReviewCount', val)}
+                    isEditMode={isEditMode}
+                    as="span"
+                    className="reviews-count"
+                  />
                 </div>
               </div>
+            </div>
 
+            <h1 className="hero-headline">
               <span className="headline-highlight-row">
                 <EditableText
-                  value={heroContent.headlineHighlight || 'REFRESHMENT'}
+                  value={heroContent.headlineHighlight || 'NATURAL PURITY'}
                   onChange={(val) => updateField('headlineHighlight', val)}
                   isEditMode={isEditMode}
                   as="span"
@@ -82,7 +73,7 @@ export default function Hero({
               <br />
               <span className="headline-bottom-row">
                 <EditableText
-                  value={heroContent.headlineLine2 || 'IN EVERY SIP'}
+                  value={heroContent.headlineLine2 || 'IN EVERY SERVING'}
                   onChange={(val) => updateField('headlineLine2', val)}
                   isEditMode={isEditMode}
                   as="span"
@@ -94,7 +85,7 @@ export default function Hero({
             <EditableText
               value={
                 heroContent.subtext ||
-                'A Perfectly Balanced Drink Made With Natural Ingredients To Hydrate, Energize, And Refresh You Anytime, Anywhere.'
+                'Authentic traditional herbal powders and natural wellness foods crafted from pure organic botanicals to nourish and energize your daily life.'
               }
               onChange={(val) => updateField('subtext', val)}
               isEditMode={isEditMode}
@@ -108,7 +99,7 @@ export default function Hero({
               <div className="hero-meta-item">
                 <span className="meta-dot"></span>
                 <EditableText
-                  value={heroContent.metaPill1 || 'Healthy Juice Drink'}
+                  value={heroContent.metaPill1 || '100% Herbal Foods'}
                   onChange={(val) => updateField('metaPill1', val)}
                   isEditMode={isEditMode}
                   as="span"
@@ -125,7 +116,7 @@ export default function Hero({
                   className="meta-highlight-val"
                 />
                 <EditableText
-                  value={heroContent.metaPill2Sub || 'Organic Fruit Drink'}
+                  value={heroContent.metaPill2Sub || 'Natural & Organic'}
                   onChange={(val) => updateField('metaPill2Sub', val)}
                   isEditMode={isEditMode}
                   as="span"
@@ -151,7 +142,7 @@ export default function Hero({
                 onClick={onExploreClick}
                 id="hero-explore-btn"
               >
-                <span>Explore Flavors</span>
+                <span>Explore Products</span>
               </button>
             </div>
 
@@ -169,7 +160,7 @@ export default function Hero({
               <div className="trust-item">
                 <Droplets size={15} />
                 <EditableText
-                  value={heroContent.trustItem2 || 'Zero Artificial Sweeteners'}
+                  value={heroContent.trustItem2 || 'Zero Preservatives & Additives'}
                   onChange={(val) => updateField('trustItem2', val)}
                   isEditMode={isEditMode}
                   as="span"
@@ -178,7 +169,7 @@ export default function Hero({
               <div className="trust-item">
                 <Sparkles size={15} />
                 <EditableText
-                  value={heroContent.trustItem3 || 'Infinitely Recyclable Aluminum'}
+                  value={heroContent.trustItem3 || 'Traditional Heritage Recipe'}
                   onChange={(val) => updateField('trustItem3', val)}
                   isEditMode={isEditMode}
                   as="span"

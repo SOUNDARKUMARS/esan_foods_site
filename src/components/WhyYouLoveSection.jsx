@@ -47,7 +47,7 @@ export default function WhyYouLoveSection({
     <section className="benefits-section" id="benefits">
       <div className="section-container">
         <div className="benefits-header text-center">
-          <h2 className="section-title">WHY YOU'LL LOVE THIS DRINK</h2>
+          <h2 className="section-title">WHY YOU'LL LOVE OUR NATURAL FOODS</h2>
           <p className="section-subtitle">
             Pure botanical craftsmanship meets functional daily wellness.
           </p>

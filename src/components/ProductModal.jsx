@@ -18,21 +18,65 @@ import {
   ArrowRight,
 } from 'lucide-react'
 
+import {
+  getProductName,
+  getProductSubtitle,
+  getProductDescription,
+  getProductCategory,
+  getProductBadge,
+} from '../data/tamilService'
+import { getRatingSummary, subscribeToReviews } from '../data/reviewService'
+import { findSingleItemOption } from '../data/productService'
+
 export default function ProductModal({
   product,
   isOpen,
   onClose,
   onAddToCart,
   onOpenDetail,
+  lang = 'en',
 }) {
   const [qty, setQty] = useState(1)
   const [activeMedia, setActiveMedia] = useState({ type: 'image', url: product?.image, index: 0 })
   const [activeTab, setActiveTab] = useState('overview') // 'overview' | 'nutrition' | 'ingredients'
+  const [selectedOptId, setSelectedOptId] = useState(null)
+  const [ratingSummary, setRatingSummary] = useState(() =>
+    product ? getRatingSummary(product.id) : { average: 5.0, totalCount: 0 }
+  )
+
+  useEffect(() => {
+    if (product?.id) {
+      setRatingSummary(getRatingSummary(product.id))
+      const unsub = subscribeToReviews(() => {
+        setRatingSummary(getRatingSummary(product.id))
+      })
+      return () => unsub()
+    }
+  }, [product?.id])
+
+  const quantityOptions = product
+    ? (Array.isArray(product.quantityOptions))
+      ? product.quantityOptions
+      : (Array.isArray(product.quantity_options))
+      ? product.quantity_options
+      : (Array.isArray(product.nutrition?.quantityOptions))
+      ? product.nutrition.quantityOptions
+      : []
+    : []
 
   // Reset state when a new product is opened
   useEffect(() => {
     if (product) {
       setQty(1)
+      const opts = Array.isArray(product.quantityOptions)
+        ? product.quantityOptions
+        : (Array.isArray(product.quantity_options)
+        ? product.quantity_options
+        : (Array.isArray(product.nutrition?.quantityOptions)
+        ? product.nutrition.quantityOptions
+        : []))
+      const defaultOpt = findSingleItemOption(opts)
+      setSelectedOptId(defaultOpt?.id || opts[0]?.id || null)
       setActiveMedia({
         type: 'image',
         url: product.image,
@@ -49,16 +93,21 @@ export default function ProductModal({
     ? product.galleryImages
     : [product.image]
 
+  const activeOption = quantityOptions.length > 0
+    ? (quantityOptions.find((o) => o.id === selectedOptId) || quantityOptions[0] || null)
+    : null
+  const effectivePrice = Number(activeOption?.price ?? product.price ?? 0)
+
   const handleQty = (delta) => {
     setQty((prev) => Math.max(1, prev + delta))
   }
 
   const handleAdd = () => {
-    onAddToCart(product, qty)
+    onAddToCart(product, qty, activeOption || null)
     onClose()
   }
 
-  const totalPrice = (product.price * qty).toFixed(2)
+  const totalPrice = (effectivePrice * qty).toFixed(2)
 
   return (
     <div className="modal-overlay animate-fade-in" onClick={onClose}>
@@ -82,10 +131,7 @@ export default function ProductModal({
           {/* Modal Left: Product Media Gallery Stage */}
           <div className="product-modal-gallery-col">
             {/* Main Stage Display (Image or Video) */}
-            <div
-              className="product-modal-stage-wrap"
-              style={{ backgroundColor: product.bgSoft || '#f6f9f2' }}
-            >
+            <div className="product-modal-stage-wrap">
               {activeMedia.type === 'video' ? (
                 <div className="product-modal-video-container">
                   <video
@@ -114,7 +160,7 @@ export default function ProductModal({
                 className="modal-badge-float"
                 style={{ borderColor: product.color, color: product.color }}
               >
-                {product.badge || '100% Organic'}
+                {getProductBadge(product, lang) || (lang === 'ta' ? '100% இயற்கை' : '100% Organic')}
               </div>
             </div>
 
@@ -138,7 +184,7 @@ export default function ProductModal({
                   title={`View image ${idx + 1}`}
                   aria-label={`View image ${idx + 1}`}
                 >
-                  <img src={imgUrl} alt={`${product.name} preview ${idx + 1}`} />
+                  <img src={imgUrl} alt={`${getProductName(product, lang)} preview ${idx + 1}`} />
                 </button>
               ))}
 
@@ -171,15 +217,15 @@ export default function ProductModal({
             <div className="modal-trust-pills-row">
               <div className="modal-trust-pill">
                 <ShieldCheck size={14} className="text-emerald" />
-                <span>Non-GMO Certified</span>
+                <span>{lang === 'ta' ? 'பாரம்பரிய மூலிகை' : 'Non-GMO Certified'}</span>
               </div>
               <div className="modal-trust-pill">
                 <Droplets size={14} className="text-blue" />
-                <span>Zero Sugar Crash</span>
+                <span>{lang === 'ta' ? 'சுத்தமான தயாரிப்பு' : 'Zero Sugar Crash'}</span>
               </div>
               <div className="modal-trust-pill">
                 <Sparkles size={14} className="text-amber" />
-                <span>Infinitely Recyclable</span>
+                <span>{lang === 'ta' ? 'இயற்கை புத்துணர்ச்சி' : 'Infinitely Recyclable'}</span>
               </div>
             </div>
           </div>
@@ -189,43 +235,55 @@ export default function ProductModal({
             {/* Header info */}
             <div className="product-modal-header">
               <div className="product-category-sub-row">
-                <span className="product-modal-category">{product.category}</span>
-                <span className="product-modal-volume-tag">{product.volume} Can</span>
+                <span className="product-modal-category">{getProductCategory(product, lang)}</span>
+                <span className="product-modal-volume-tag">{product.volume}</span>
               </div>
-              <h2 className="product-modal-title">{product.name}</h2>
-              <p className="product-modal-tagline">{product.subtitle}</p>
+              <h2 className="product-modal-title">{getProductName(product, lang)}</h2>
+              <p className="product-modal-tagline">{getProductSubtitle(product, lang)}</p>
 
-              {/* Rating & Reviews */}
-              <div className="product-modal-rating-row">
+              {/* Rating & Reviews (from live customer feedback) */}
+              <div
+                className="product-modal-rating-row"
+                style={{ cursor: onOpenDetail ? 'pointer' : 'default' }}
+                onClick={() => onOpenDetail && onOpenDetail(product)}
+                title={onOpenDetail ? 'Click to view customer reviews breakdown' : ''}
+              >
                 <div className="stars-group">
                   {[...Array(5)].map((_, i) => (
                     <Star
                       key={i}
                       size={14}
-                      className="star-filled"
-                      fill="currentColor"
+                      className={i < Math.round(ratingSummary.average) ? 'star-filled' : 'star-empty'}
+                      fill={i < Math.round(ratingSummary.average) ? 'currentColor' : 'none'}
                     />
                   ))}
                 </div>
-                <span className="rating-num">{product.rating}</span>
-                <span className="reviews-num">({product.reviewsCount} customer reviews)</span>
+                <span className="rating-num">{ratingSummary.average.toFixed(1)}</span>
+                <span className="reviews-num">
+                  ({ratingSummary.totalCount} {lang === 'ta' ? 'வாடிக்கையாளர் மதிப்புரைகள்' : 'customer reviews'})
+                </span>
+                {onOpenDetail && (
+                  <span className="reviews-jump-link">
+                    {lang === 'ta' ? 'விமர்சனங்கள் பார்க்க →' : 'Read & write reviews →'}
+                  </span>
+                )}
               </div>
             </div>
 
             {/* Price & Savings Row */}
             <div className="product-modal-price-box">
               <div className="price-main-group">
-                <span className="modal-price">${product.price.toFixed(2)}</span>
+                <span className="modal-price">₹{product.price.toFixed(2)}</span>
                 {product.originalPrice && (
                   <span className="modal-original-price">
-                    ${product.originalPrice.toFixed(2)}
+                    ₹{product.originalPrice.toFixed(2)}
                   </span>
                 )}
                 <span className="modal-per-unit">/ unit</span>
               </div>
               {product.originalPrice && (
                 <span className="discount-tag-pill">
-                  Save ${(product.originalPrice - product.price).toFixed(2)}
+                  {lang === 'ta' ? 'சேமிப்பு' : 'Save'} ₹{(product.originalPrice - product.price).toFixed(2)}
                 </span>
               )}
             </div>
@@ -237,33 +295,35 @@ export default function ProductModal({
                 className={`modal-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
                 onClick={() => setActiveTab('overview')}
               >
-                Overview
+                {lang === 'ta' ? 'அறிமுகம்' : 'Overview'}
               </button>
               <button
                 type="button"
                 className={`modal-tab-btn ${activeTab === 'nutrition' ? 'active' : ''}`}
                 onClick={() => setActiveTab('nutrition')}
               >
-                Nutrition
+                {lang === 'ta' ? 'ஊட்டச்சத்து' : 'Nutrition'}
               </button>
               <button
                 type="button"
                 className={`modal-tab-btn ${activeTab === 'ingredients' ? 'active' : ''}`}
                 onClick={() => setActiveTab('ingredients')}
               >
-                Ingredients
+                {lang === 'ta' ? 'மூலிகைகள்' : 'Ingredients'}
               </button>
             </div>
 
             {/* Tab 1: Overview & Tasting profile */}
             {activeTab === 'overview' && (
               <div className="modal-tab-body animate-fade-in">
-                <p className="product-modal-desc">{product.description}</p>
+                <p className="product-modal-desc">
+                  {getProductDescription(product, lang) || product.description}
+                </p>
 
                 {product.tastingNotes && product.tastingNotes.length > 0 && (
                   <div className="modal-notes-section">
                     <h4 className="modal-section-title">
-                      <Sparkles size={14} /> Tasting Profile
+                      <Sparkles size={14} /> {lang === 'ta' ? 'சுவை விவரம்' : 'Tasting Profile'}
                     </h4>
                     <div className="tasting-notes-pills">
                       {product.tastingNotes.map((note, idx) => (
@@ -282,19 +342,19 @@ export default function ProductModal({
               <div className="modal-tab-body animate-fade-in">
                 <div className="nutrition-grid-chips">
                   <div className="nutri-chip">
-                    <span className="nutri-label">Calories</span>
+                    <span className="nutri-label">{lang === 'ta' ? 'கலோரிகள்' : 'Calories'}</span>
                     <span className="nutri-val">{product.nutrition?.calories || '90 kcal'}</span>
                   </div>
                   <div className="nutri-chip">
-                    <span className="nutri-label">Natural Sugar</span>
+                    <span className="nutri-label">{lang === 'ta' ? 'இயற்கை சர்க்கரை' : 'Natural Sugar'}</span>
                     <span className="nutri-val">{product.nutrition?.sugar || '12g'}</span>
                   </div>
                   <div className="nutri-chip">
-                    <span className="nutri-label">Total Carbs</span>
+                    <span className="nutri-label">{lang === 'ta' ? 'கார்போஹைட்ரேட்' : 'Total Carbs'}</span>
                     <span className="nutri-val">{product.nutrition?.carbs || '22g'}</span>
                   </div>
                   <div className="nutri-chip">
-                    <span className="nutri-label">Vitamin C</span>
+                    <span className="nutri-label">{lang === 'ta' ? 'வைட்டமின் சி' : 'Vitamin C'}</span>
                     <span className="nutri-val">{product.nutrition?.vitaminC || '90% DV'}</span>
                   </div>
                   {product.nutrition?.potassium && (
@@ -304,7 +364,7 @@ export default function ProductModal({
                     </div>
                   )}
                   <div className="nutri-chip">
-                    <span className="nutri-label">Organic</span>
+                    <span className="nutri-label">{lang === 'ta' ? 'இயற்கை தரம்' : 'Organic'}</span>
                     <span className="nutri-val">100% Certified</span>
                   </div>
                 </div>
@@ -315,7 +375,9 @@ export default function ProductModal({
             {activeTab === 'ingredients' && (
               <div className="modal-tab-body animate-fade-in">
                 <div className="modal-ingredients-section">
-                  <h4 className="modal-section-title">Pure Farm Ingredients</h4>
+                  <h4 className="modal-section-title">
+                    {lang === 'ta' ? 'தூய மூலிகைப் பொருட்கள்' : 'Pure Farm Ingredients'}
+                  </h4>
                   <ul className="ingredients-bullet-list">
                     {(product.ingredients || []).map((ing, i) => (
                       <li key={i}>
@@ -325,8 +387,58 @@ export default function ProductModal({
                     ))}
                   </ul>
                   <p className="ingredients-disclaimer">
-                    Free from high fructose corn syrup, artificial colors, synthetic binders, or chemical preservatives.
+                    {lang === 'ta'
+                      ? 'செயற்கை நிறங்கள், கெமிக்கல்கள் மற்றும் பிரிசர்வேட்டிவ்ஸ் எதுவும் சேர்க்கப்படவில்லை.'
+                      : 'Free from high fructose corn syrup, artificial colors, synthetic binders, or chemical preservatives.'}
                   </p>
+                </div>
+              </div>
+            )}
+
+            {/* Quantity Options Selector (if options exist) */}
+            {quantityOptions.length > 0 && (
+              <div className="modal-pack-selector-wrap" style={{ marginBottom: '14px' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: '6px' }}>
+                  {lang === 'ta' ? 'அளவைத் தேர்ந்தெடுக்கவும்:' : 'Select Quantity Option:'}
+                </span>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {quantityOptions.map((opt) => {
+                    const isSelected = (activeOption?.id === opt.id)
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setSelectedOptId(opt.id)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '10px',
+                          border: isSelected ? '2px solid #059669' : '1.5px solid #e2e8f0',
+                          background: isSelected ? '#f0fdf4' : '#ffffff',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-start',
+                          gap: '2px',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#1e293b' }}>{opt.title}</span>
+                          {opt.badge && (
+                            <span style={{ fontSize: '0.58rem', fontWeight: 800, padding: '1px 5px', borderRadius: '999px', background: '#059669', color: '#fff' }}>
+                              {opt.badge}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.74rem' }}>
+                          <strong style={{ color: '#047857' }}>₹{Number(opt.price || 0).toFixed(2)}</strong>
+                          {(opt.size || opt.discountText) && (
+                            <span style={{ color: '#64748b' }}>({opt.size || opt.discountText})</span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -361,7 +473,11 @@ export default function ProductModal({
                 onClick={handleAdd}
               >
                 <ShoppingBag size={16} />
-                <span>Add to Box — ${totalPrice}</span>
+                <span>
+                  {lang === 'ta'
+                    ? `கூடையில் சேர்க்க — ₹${totalPrice}`
+                    : `Add to Box — ₹${totalPrice}`}
+                </span>
               </button>
             </div>
 
@@ -376,7 +492,9 @@ export default function ProductModal({
                     onOpenDetail(product)
                   }}
                 >
-                  <span>Open Full Detailed Screen</span>
+                  <span>
+                    {lang === 'ta' ? 'முழு திரை விவரங்கள் திறக்க' : 'Open Full Detailed Screen'}
+                  </span>
                   <ArrowRight size={14} />
                 </button>
               </div>

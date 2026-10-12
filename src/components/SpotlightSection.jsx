@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { Plus, Minus, Check, Flame, Sparkles, Leaf, Award, CheckCircle2 } from 'lucide-react'
 import { PRODUCTS as FALLBACK_PRODUCTS, passionSpotlight } from '../data/mockData'
+import {
+  getProductName,
+  getProductDescription,
+  getProductCategory,
+} from '../data/tamilService'
 
 export default function SpotlightSection({
   products,
@@ -9,6 +14,7 @@ export default function SpotlightSection({
   isEditMode = false,
   onAddToCart,
   onQuickView,
+  lang = 'en',
 }) {
   const productList = products && products.length > 0 ? products : FALLBACK_PRODUCTS
 
@@ -103,7 +109,7 @@ export default function SpotlightSection({
               <div className="spotlight-header-actions-row">
                 <div className="spotlight-badge-tag">
                   <Leaf size={14} />
-                  <span>Featured Masterpiece</span>
+                  <span>{lang === 'ta' ? 'சிறப்புத் தயாரிப்பு' : 'Featured Masterpiece'}</span>
                 </div>
 
                 {/* Admin Masterpiece Selector Button in Edit Mode */}
@@ -118,7 +124,7 @@ export default function SpotlightSection({
                         type="button"
                         className="btn-set-masterpiece"
                         onClick={handleMakeFeatured}
-                        title="Set this drink as the storefront featured masterpiece"
+                        title="Set this product as the storefront featured item"
                       >
                         <Award size={13} />
                         <span>Set as Masterpiece</span>
@@ -128,23 +134,23 @@ export default function SpotlightSection({
                 )}
               </div>
 
-              <h2 className="spotlight-title">{activeProduct.name.toUpperCase()}</h2>
+              <h2 className="spotlight-title">{getProductName(activeProduct, lang).toUpperCase()}</h2>
 
               <div className="spotlight-attributes-row">
-                <span>Refreshing</span>
+                <span>{lang === 'ta' ? 'புத்துணர்ச்சியூட்டும்' : 'Refreshing'}</span>
                 <span className="dot">•</span>
-                <span>Natural</span>
+                <span>{lang === 'ta' ? 'இயற்கையானது' : 'Natural'}</span>
                 <span className="dot">•</span>
-                <span>Zero Artificial Colors</span>
+                <span>{lang === 'ta' ? 'செயற்கை நிறங்கள் அற்றது' : 'Zero Artificial Colors'}</span>
               </div>
 
               <p className="spotlight-description">
-                {activeProduct.description}
+                {getProductDescription(activeProduct, lang) || activeProduct.description}
               </p>
 
               {/* Price */}
               <div className="spotlight-price-tag">
-                <span className="currency">$</span>
+                <span className="currency">₹</span>
                 <span className="amount">{activeProduct.price.toFixed(2)}</span>
                 <span className="volume-label">/ {activeProduct.volume}</span>
               </div>
@@ -153,7 +159,7 @@ export default function SpotlightSection({
               <div className="nutrition-facts-box">
                 <div className="nutrition-heading">
                   <Flame size={14} className="nutrition-icon" />
-                  <span>Nutrition Facts</span>
+                  <span>{lang === 'ta' ? 'ஊட்டச்சத்து விவரங்கள்' : 'Nutrition Facts'}</span>
                 </div>
                 <div className="nutrition-pills-row">
                   <span className="nutri-pill">
@@ -198,7 +204,11 @@ export default function SpotlightSection({
                   onClick={() => onAddToCart(activeProduct, qty)}
                   id="spotlight-add-cart-btn"
                 >
-                  <span>Add To Box — ${totalPrice}</span>
+                  <span>
+                    {lang === 'ta'
+                      ? `கூடையில் சேர்க்க — ₹${totalPrice}`
+                      : `Add To Box — ₹${totalPrice}`}
+                  </span>
                 </button>
 
                 <button
@@ -206,7 +216,7 @@ export default function SpotlightSection({
                   className="btn-pill-outline spotlight-details-btn"
                   onClick={() => onQuickView(activeProduct)}
                 >
-                  <span>View Details</span>
+                  <span>{lang === 'ta' ? 'விவரங்கள் பார்க்க' : 'View Details'}</span>
                 </button>
               </div>
             </div>
