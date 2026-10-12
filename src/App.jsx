@@ -40,6 +40,12 @@ import {
 import AdminInlineBar from './components/AdminInlineBar'
 import { supabase } from './lib/supabase'
 import { createOrder } from './data/orderService'
+import { addAdminOrder } from './data/adminData'
+import {
+  fetchUserCart,
+  saveUserCart,
+  clearUserCart,
+} from './data/cartService'
 import './App.css'
 
 export default function App() {
@@ -161,24 +167,26 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState('All Products')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Cart State (loaded from localStorage, empty [] by default)
-  const [cartItems, setCartItems] = useState(() => {
-    try {
-      const saved = localStorage.getItem('esan_cart')
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
-  })
+  // Cart State (stored at the DB level for authenticated accounts, isolated from guest)
+  const [cartItems, setCartItems] = useState([])
 
-  // Persist cart to localStorage whenever it changes
+  // Automatically save cart to database for logged in user (or guest cache for guest)
   useEffect(() => {
-    try {
-      localStorage.setItem('esan_cart', JSON.stringify(cartItems))
-    } catch (e) {
-      console.warn('Failed to save cart to localStorage', e)
+    if (!authInitialized) return
+
+    const userId = currentUser?.supabaseId || currentUser?.id
+    if (userId) {
+      saveUserCart(userId, cartItems)
+    } else {
+      try {
+        if (cartItems.length > 0) {
+          localStorage.setItem('esan_cart_guest', JSON.stringify(cartItems))
+        } else {
+          localStorage.removeItem('esan_cart_guest')
+        }
+      } catch (_) {}
     }
-  }, [cartItems])
+  }, [cartItems, currentUser?.id, currentUser?.supabaseId, authInitialized])
 
   // Wishlist State (persisted in localStorage, empty [] by default)
   const [wishlist, setWishlist] = useState(() => {
@@ -230,15 +238,20 @@ export default function App() {
   // Toast Notification
   const [toast, setToast] = useState(null)
 
-  const showToast = (title, message = '') => {
-    setToast({ title, message })
+  const showToast = (title, message = '', options = {}) => {
+    setToast({
+      title,
+      message,
+      onClick: options.onClick || null,
+      actionText: options.actionText || null,
+    })
   }
 
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => {
         setToast(null)
-      }, 3500)
+      }, 4200)
       return () => clearTimeout(timer)
     }
   }, [toast])
@@ -249,6 +262,9 @@ export default function App() {
 
     async function initSupabaseAuth() {
       try {
+        // Clean legacy global storage key to prevent cross-account bleed
+        try { localStorage.removeItem('esan_cart') } catch (_) {}
+
         const auth = await verifyCurrentSupabaseSession()
         if (!isMounted) return
         if (!auth) {
@@ -266,10 +282,20 @@ export default function App() {
           } else {
             setCurrentUser(null)
             setIsAdminView(false)
+            // Load unauthenticated guest cart if present
+            try {
+              const guestSaved = localStorage.getItem('esan_cart_guest')
+              if (guestSaved) setCartItems(JSON.parse(guestSaved))
+            } catch (_) {}
           }
         } else {
           setCurrentUser(auth.user)
           setIsAdminView(auth.isAdmin)
+          // Fetch authenticated user's cart from Supabase DB
+          const dbCart = await fetchUserCart(auth.user.id)
+          if (isMounted) {
+            setCartItems(dbCart || [])
+          }
         }
       } catch (err) {
         if (isMounted) {
@@ -304,14 +330,24 @@ export default function App() {
       if (!isMounted) return
 
       if (event === 'SIGNED_OUT' || !session) {
-        // Do NOT call clearSession() / signOut() here to avoid recursive infinite loop!
+        // Clear user & cart completely on sign out
         setCurrentUser(null)
         setIsAdminView(false)
+        setCartItems([])
+        try {
+          localStorage.removeItem('esan_cart')
+          localStorage.removeItem('esan_cart_guest')
+        } catch (_) {}
       } else if (session?.user) {
         const appUser = await syncUserProfile(session.user)
         if (!isMounted) return
         setCurrentUser(appUser)
         setIsAdminView(appUser?.role === 'admin')
+        // Load user cart directly from DB
+        const dbCart = await fetchUserCart(session.user.id)
+        if (isMounted) {
+          setCartItems(dbCart || [])
+        }
       }
     })
 
@@ -322,7 +358,7 @@ export default function App() {
   }, [])
 
   // Auth Handlers
-  const handleAuthSuccess = (userObj, isAdmin) => {
+  const handleAuthSuccess = async (userObj, isAdmin) => {
     setCurrentUser(userObj)
     const isUserAdmin = Boolean(isAdmin || userObj?.role === 'admin')
     if (isUserAdmin) {
@@ -332,9 +368,28 @@ export default function App() {
       setIsAdminView(false)
       showToast(`Welcome, ${userObj.name}!`, 'You are now signed in.')
     }
+
+    // Load newly authenticated user's cart from Supabase database
+    if (userObj?.id) {
+      const dbCart = await fetchUserCart(userObj.id)
+      setCartItems(dbCart || [])
+    }
   }
 
   const handleLogout = async () => {
+    const userId = currentUser?.supabaseId || currentUser?.id
+    if (userId) {
+      try {
+        localStorage.removeItem(`esan_cart_${userId}`)
+      } catch (_) {}
+    }
+    // Immediately empty cart state
+    setCartItems([])
+    try {
+      localStorage.removeItem('esan_cart')
+      localStorage.removeItem('esan_cart_guest')
+    } catch (_) {}
+
     await clearSession()
     setCurrentUser(null)
     setIsAdminView(false)
@@ -444,7 +499,14 @@ export default function App() {
       }
     })
     const optionLabel = option?.title ? ` (${option.title})` : ''
-    showToast(`Added to Box!`, `${quantity}x ${product.name}${optionLabel} ready for checkout.`)
+    showToast(
+      `Added to Box!`,
+      `${quantity}x ${product.name}${optionLabel} ready for checkout.`,
+      {
+        actionText: 'Open Box →',
+        onClick: () => setIsCartOpen(true),
+      }
+    )
   }
 
   const handleUpdateCartQty = (cartItemIdOrProdId, delta) => {
@@ -596,14 +658,14 @@ export default function App() {
                   lang={lang}
                 />
 
-                {/* What Our Customers Say */}
-                <CustomerReviewsSection
+                {/* What Our Customers Say (temporarily commented out per user request) */}
+                {/* <CustomerReviewsSection
                   testimonials={siteContent.testimonials}
                   isEditMode={isEditMode}
                   onUpdateTestimonials={(t) =>
                     setSiteContent((prev) => ({ ...prev, testimonials: t }))
                   }
-                />
+                /> */}
 
                 {/* Why You'll Love This Drink */}
                 <WhyYouLoveSection
@@ -652,6 +714,8 @@ export default function App() {
                 onToggleWishlist={handleToggleWishlist}
                 lang={lang}
                 onToggleLang={handleToggleLang}
+                currentUser={currentUser}
+                onOpenAuth={() => setIsAuthModalOpen(true)}
               />
             }
           />
@@ -670,6 +734,8 @@ export default function App() {
                 onToggleWishlist={handleToggleWishlist}
                 lang={lang}
                 onToggleLang={handleToggleLang}
+                currentUser={currentUser}
+                onOpenAuth={() => setIsAuthModalOpen(true)}
               />
             }
           />
@@ -751,7 +817,7 @@ export default function App() {
         onOrderSuccess={async (checkoutData) => {
           try {
             // Insert order into Supabase orders + order_items tables
-            await createOrder({
+            const newOrder = await createOrder({
               userId: currentUser?.supabaseId || currentUser?.id || null,
               customerName: checkoutData.formData?.name?.trim() || currentUser?.name || 'Guest Shopper',
               customerEmail: checkoutData.formData?.email?.trim() || currentUser?.email || 'guest@esanfoods.com',
@@ -764,23 +830,64 @@ export default function App() {
               shippingCost: checkoutData.shippingCost,
               taxAmount: checkoutData.tax,
               total: checkoutData.grandTotal,
-              paymentMethod: checkoutData.formData?.paymentMethod === 'card'
-                ? 'Credit Card'
-                : checkoutData.formData?.paymentMethod === 'apple'
-                  ? 'Apple Pay'
-                  : checkoutData.formData?.paymentMethod === 'upi'
-                    ? 'UPI / Net Banking'
-                    : (checkoutData.formData?.paymentMethod || 'Credit Card'),
+              paymentMethod: checkoutData.formData?.paymentMethod === 'razorpay'
+                ? 'Razorpay'
+                : checkoutData.formData?.paymentMethod === 'cod'
+                  ? 'Cash on Delivery'
+                  : checkoutData.formData?.paymentMethod === 'card'
+                    ? 'Credit Card'
+                    : checkoutData.formData?.paymentMethod === 'upi'
+                      ? 'UPI / Net Banking'
+                      : (checkoutData.formData?.paymentMethod || 'Razorpay'),
+              paymentStatus: checkoutData.paymentDetails?.paymentId ? 'Paid' : (checkoutData.formData?.paymentMethod === 'cod' ? 'Pending' : 'Paid'),
+              notes: checkoutData.paymentDetails?.paymentId
+                ? `Razorpay Payment ID: ${checkoutData.paymentDetails.paymentId} | Order Ref: ${checkoutData.paymentDetails.orderId || ''}`
+                : null,
               shippingAddress: checkoutData.formData?.address,
               shippingCity: checkoutData.formData?.city,
+              shippingState: checkoutData.formData?.state || 'Tamil Nadu',
               shippingZip: checkoutData.formData?.zip,
             })
+            if (newOrder) {
+              addAdminOrder(newOrder)
+            }
             setCartItems([])
+            const userId = currentUser?.supabaseId || currentUser?.id
+            if (userId) clearUserCart(userId)
+            try {
+              localStorage.removeItem('esan_cart_guest')
+              localStorage.removeItem('esan_cart')
+            } catch (_) {}
             showToast('Order Placed Successfully! 🎉', 'Your order has been saved and is being processed.')
           } catch (err) {
-            console.error('Failed to create order:', err)
-            showToast('Order Saved Locally', 'Could not sync to database. We\'ll retry later.')
+            console.error('Failed to create order in database, saving locally:', err)
+            const localOrder = {
+              id: 'ORD-' + Math.floor(1000 + Math.random() * 9000),
+              userId: currentUser?.supabaseId || currentUser?.id || null,
+              customer: {
+                name: checkoutData.formData?.name?.trim() || currentUser?.name || 'Guest Shopper',
+                email: checkoutData.formData?.email?.trim() || currentUser?.email || 'guest@esanfoods.com',
+                avatar: currentUser?.avatar || null,
+              },
+              items: (checkoutData.cartItems || cartItems).map((ci) => ({
+                productId: ci.product?.id || ci.id,
+                name: ci.product?.name || ci.name,
+                qty: ci.quantity || 1,
+                price: ci.product?.price || ci.price,
+              })),
+              total: checkoutData.grandTotal,
+              status: 'Processing',
+              date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+            }
+            addAdminOrder(localOrder)
+            showToast('Order Saved Locally', 'Saved to your orders list.')
             setCartItems([])
+            const uid = currentUser?.supabaseId || currentUser?.id
+            if (uid) clearUserCart(uid)
+            try {
+              localStorage.removeItem('esan_cart_guest')
+              localStorage.removeItem('esan_cart')
+            } catch (_) {}
           }
         }}
       />

@@ -1,109 +1,35 @@
-// Initial mock orders, inventory state, and revenue metrics stored in localStorage
+// Initial orders, inventory state, and revenue metrics stored in localStorage
 
 const ORDERS_KEY = 'juicera_admin_orders'
 const INVENTORY_KEY = 'juicera_admin_inventory'
 
-export const INITIAL_ORDERS = [
-  {
-    id: 'ORD-9842',
-    customer: {
-      name: 'Sarah Jenkins',
-      email: 'sarah.j@example.com',
-      avatar: null,
-    },
-    items: [
-      { name: 'Guava Juice Drink (330ml)', qty: 4, price: 3.50 },
-      { name: 'Tinned Passion Juice (330ml)', qty: 2, price: 6.20 },
-    ],
-    total: 26.40,
-    status: 'Delivered',
-    date: '2026-10-07 18:32',
-    paymentMethod: 'Credit Card (••4242)',
-    shippingAddress: '420 Mission St, San Francisco, CA',
-  },
-  {
-    id: 'ORD-9841',
-    customer: {
-      name: 'Marcus Vance',
-      email: 'm.vance@fitlife.org',
-      avatar: null,
-    },
-    items: [
-      { name: 'Pure Coconut Water (330ml)', qty: 12, price: 4.50 },
-    ],
-    total: 54.00,
-    status: 'Processing',
-    date: '2026-10-07 19:15',
-    paymentMethod: 'Apple Pay',
-    shippingAddress: '1088 Sunset Blvd, Los Angeles, CA',
-  },
-  {
-    id: 'ORD-9840',
-    customer: {
-      name: 'Elena Rostova',
-      email: 'elena.rostova@design.io',
-      avatar: null,
-    },
-    items: [
-      { name: 'Soursop Juice (330ml)', qty: 6, price: 4.50 },
-      { name: 'Sparkling Strawberry (330ml)', qty: 6, price: 3.80 },
-    ],
-    total: 49.80,
-    status: 'Shipped',
-    date: '2026-10-07 16:40',
-    paymentMethod: 'Credit Card (••8819)',
-    shippingAddress: '742 Park Ave, New York, NY',
-  },
-  {
-    id: 'ORD-9839',
-    customer: {
-      name: 'David Kim',
-      email: 'david.kim@techcorp.com',
-      avatar: null,
-    },
-    items: [
-      { name: 'Golden Mango Zing (330ml)', qty: 8, price: 3.90 },
-      { name: 'Tinned Passion Juice (330ml)', qty: 4, price: 6.20 },
-    ],
-    total: 56.00,
-    status: 'Delivered',
-    date: '2026-10-06 14:12',
-    paymentMethod: 'PayPal',
-    shippingAddress: '120 University Ave, Palo Alto, CA',
-  },
-  {
-    id: 'ORD-9838',
-    customer: {
-      name: 'Chloe Bennett',
-      email: 'chloe.b@natureclub.net',
-      avatar: null,
-    },
-    items: [
-      { name: 'Guava Juice Drink (330ml)', qty: 2, price: 3.50 },
-    ],
-    total: 7.00,
-    status: 'Cancelled',
-    date: '2026-10-06 11:05',
-    paymentMethod: 'Credit Card (••1042)',
-    shippingAddress: '88 King St, Seattle, WA',
-  },
-]
+// No hardcoded mock orders - all orders must come from actual checkouts
+export const INITIAL_ORDERS = []
+
+const MOCK_ORDER_IDS = new Set(['ORD-9842', 'ORD-9841', 'ORD-9840', 'ORD-9839', 'ORD-9838'])
 
 export function getAdminOrders() {
   try {
     const raw = localStorage.getItem(ORDERS_KEY)
     if (!raw) {
-      localStorage.setItem(ORDERS_KEY, JSON.stringify(INITIAL_ORDERS))
-      return INITIAL_ORDERS
+      return []
     }
-    return JSON.parse(raw)
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      // Filter out legacy hardcoded mock orders
+      const realOrders = parsed.filter((o) => !MOCK_ORDER_IDS.has(o.id))
+      return realOrders
+    }
+    return []
   } catch (e) {
-    return INITIAL_ORDERS
+    return []
   }
 }
 
 export function saveAdminOrders(orders) {
-  localStorage.setItem(ORDERS_KEY, JSON.stringify(orders))
+  try {
+    localStorage.setItem(ORDERS_KEY, JSON.stringify(orders))
+  } catch (_) {}
 }
 
 export function updateOrderStatus(orderId, newStatus) {
@@ -115,7 +41,15 @@ export function updateOrderStatus(orderId, newStatus) {
 
 export function addAdminOrder(order) {
   const orders = getAdminOrders()
-  const updated = [order, ...orders]
+  // Prevent duplicate insertion
+  const existingIdx = orders.findIndex((o) => o.id === order.id)
+  let updated
+  if (existingIdx !== -1) {
+    updated = [...orders]
+    updated[existingIdx] = order
+  } else {
+    updated = [order, ...orders]
+  }
   saveAdminOrders(updated)
   return updated
 }

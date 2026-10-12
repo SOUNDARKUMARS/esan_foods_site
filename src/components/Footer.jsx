@@ -99,7 +99,7 @@ export default function Footer({ onSubscribeSuccess }) {
             <ul className="footer-links-list">
               <li><a href="#benefits">Our Philosophy</a></li>
               <li><a href="#spotlight">Traditional Farming</a></li>
-              <li><a href="#reviews">Verified Reviews</a></li>
+              {/* <li><a href="#reviews">Verified Reviews</a></li> */}
               <li><a href="#faq">Frequently Asked Questions</a></li>
               <li><a href="#home">Wholesale Inquiries</a></li>
               <li><a href="#home">Careers</a></li>

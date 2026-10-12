@@ -32,6 +32,7 @@ import {
 import { getDefaultQuantityOptions, findSingleItemOption } from '../data/productService'
 import ProductReviewsSection from './ProductReviewsSection'
 import { getRatingSummary, subscribeToReviews } from '../data/reviewService'
+import PincodeCheck from './PincodeCheck'
 
 export default function ProductDetailScreen({
   product,
@@ -44,6 +45,8 @@ export default function ProductDetailScreen({
   onToggleWishlist,
   lang = 'en',
   onToggleLang,
+  currentUser = null,
+  onOpenAuth = null,
 }) {
   const { productId } = useParams()
   const navigate = useNavigate()
@@ -66,7 +69,7 @@ export default function ProductDetailScreen({
   const [activeTab, setActiveTab] = useState('overview') // 'overview' | 'nutrition' | 'ingredients'
   const [copiedLink, setCopiedLink] = useState(false)
   const [ratingSummary, setRatingSummary] = useState(() =>
-    activeProduct ? getRatingSummary(activeProduct.id) : { average: 5.0, totalCount: 0 }
+    activeProduct ? getRatingSummary(activeProduct.id) : { average: 0, totalCount: 0 }
   )
 
   useEffect(() => {
@@ -414,17 +417,25 @@ export default function ProductDetailScreen({
                     <Star
                       key={i}
                       size={16}
-                      className={i < Math.round(ratingSummary.average) ? 'star-filled' : 'star-empty'}
-                      fill={i < Math.round(ratingSummary.average) ? 'currentColor' : 'none'}
+                      className={ratingSummary.totalCount > 0 && i < Math.round(ratingSummary.average) ? 'star-filled' : 'star-empty'}
+                      fill={ratingSummary.totalCount > 0 && i < Math.round(ratingSummary.average) ? 'currentColor' : 'none'}
                     />
                   ))}
                 </div>
-                <strong className="detail-score">{ratingSummary.average.toFixed(1)}</strong>
-                <span className="detail-review-count">
-                  ({ratingSummary.totalCount} {lang === 'ta' ? 'வாடிக்கையாளர் மதிப்புரைகள்' : 'customer reviews'})
-                </span>
+                {ratingSummary.totalCount > 0 ? (
+                  <>
+                    <strong className="detail-score">{ratingSummary.average.toFixed(1)}</strong>
+                    <span className="detail-review-count">
+                      ({ratingSummary.totalCount} {lang === 'ta' ? 'வாடிக்கையாளர் மதிப்புரைகள்' : 'customer reviews'})
+                    </span>
+                  </>
+                ) : (
+                  <span className="detail-review-count" style={{ color: '#64748b' }}>
+                    {lang === 'ta' ? 'விமர்சனங்கள் இன்னும் இல்லை' : 'No reviews yet'}
+                  </span>
+                )}
                 <span className="detail-review-jump-hint" style={{ fontSize: '0.78rem', color: '#059669', fontWeight: 600, marginLeft: '6px' }}>
-                  {lang === 'ta' ? 'விமர்சனங்கள் பார்க்க →' : 'View all reviews →'}
+                  {lang === 'ta' ? 'விமர்சனங்கள் பகுதிக்குச் செல்ல →' : 'Customer reviews →'}
                 </span>
               </div>
             </div>
@@ -539,6 +550,12 @@ export default function ProductDetailScreen({
                 </div>
               ))}
             </div>
+
+            {/* Delivery Serviceability Check */}
+            <PincodeCheck
+              weight={Number(activeProduct?.weight) > 0 ? Number(activeProduct.weight) : 0.5}
+              className="mt-4 mb-2"
+            />
 
             {/* Informational Tabs (Overview, Nutrition, Ingredients, Reviews) */}
             <div className="detail-tabs-wrapper">
@@ -713,6 +730,8 @@ export default function ProductDetailScreen({
           productId={activeProduct.id}
           productName={getProductName(activeProduct, lang)}
           lang={lang}
+          currentUser={currentUser}
+          onOpenAuth={onOpenAuth}
           onReviewAdded={() => {
             setRatingSummary(getRatingSummary(activeProduct.id))
           }}

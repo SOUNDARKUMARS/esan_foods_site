@@ -179,6 +179,39 @@ export async function updateOrderStatus(orderId, newStatus) {
 }
 
 /**
+ * Update Shiprocket shipment details for an order.
+ */
+export async function updateOrderShipment(orderId, {
+  shiprocketOrderId,
+  shipmentId,
+  awbCode,
+  shippingStatus = 'Shipment Created',
+  shippedAt = new Date().toISOString(),
+}) {
+  const { data, error } = await supabase
+    .from('orders')
+    .update({
+      shiprocket_order_id: shiprocketOrderId ? String(shiprocketOrderId) : null,
+      shipment_id: shipmentId ? Number(shipmentId) : null,
+      awb_code: awbCode ? String(awbCode) : null,
+      shipping_status: shippingStatus,
+      shipped_at: shippedAt,
+      status: 'Shipped',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', orderId)
+    .select('*, order_items(*)')
+    .single()
+
+  if (error) {
+    console.error('updateOrderShipment error:', error)
+    throw error
+  }
+
+  return transformOrderFromDB(data)
+}
+
+/**
  * Delete an order and its items from Supabase.
  */
 export async function deleteOrder(orderId) {
@@ -208,6 +241,7 @@ function transformOrderFromDB(dbOrder) {
     customer: {
       name: dbOrder.customer_name || 'Guest Shopper',
       email: dbOrder.customer_email || '',
+      phone: dbOrder.customer_phone || '',
       avatar: dbOrder.customer_avatar || null,
     },
     items: Array.isArray(dbOrder.order_items) && dbOrder.order_items.length > 0
@@ -237,7 +271,13 @@ function transformOrderFromDB(dbOrder) {
     paymentStatus: dbOrder.payment_status || 'Paid',
     shippingAddress: dbOrder.shipping_address || '',
     shippingCity: dbOrder.shipping_city || null,
+    shippingState: dbOrder.shipping_state || null,
     shippingZip: dbOrder.shipping_zip || null,
+    shiprocketOrderId: dbOrder.shiprocket_order_id || null,
+    shipmentId: dbOrder.shipment_id || null,
+    awbCode: dbOrder.awb_code || null,
+    shippingStatus: dbOrder.shipping_status || null,
+    shippedAt: dbOrder.shipped_at || null,
     userId: dbOrder.user_id || null,
     notes: dbOrder.notes || null,
     createdAt: dbOrder.created_at,

@@ -68,7 +68,9 @@ import {
 import {
   fetchOrders,
   updateOrderStatus as supabaseUpdateOrderStatus,
+  updateOrderShipment,
 } from '../data/orderService'
+import { createShipment } from '../services/shiprocket'
 import { getDefaultQuantityOptions, findSingleItemOption } from '../data/productService'
 import { supabase } from '../lib/supabase'
 import esanLogo from '../assets/esan_foods_logo.png'
@@ -87,6 +89,7 @@ import {
   TAMIL_PRODUCT_TRANSLATIONS,
 } from '../data/tamilService'
 import { SQL_SITE_CONTENT_MIGRATION } from '../data/siteContentService'
+import { SQL_CART_MIGRATION } from '../data/cartService'
 import { generateProductContentWithAi } from '../data/aiContentService'
 import ProductModal from './ProductModal'
 import ProductDetailScreen from './ProductDetailScreen'
@@ -164,6 +167,7 @@ export default function AdminDashboard({
 
   const [orders, setOrders] = useState([])
   const [ordersLoading, setOrdersLoading] = useState(true)
+  const [creatingShipmentId, setCreatingShipmentId] = useState(null)
   const [orderFilter, setOrderFilter] = useState('All')
   const [productSearch, setProductSearch] = useState('')
   const [editorMode, setEditorMode] = useState(null) // null | 'create' | 'edit'
@@ -569,6 +573,123 @@ export default function AdminDashboard({
       // Revert on failure
       const fresh = await fetchOrders()
       setOrders(fresh)
+    }
+  }
+
+  const mapOrderToShiprocketShape = (order) => {
+    const rawName = (order.customer?.name || 'Customer').trim()
+    const nameParts = rawName.split(/\s+/)
+    const firstName = nameParts[0] || 'Customer'
+    const lastName = nameParts.slice(1).join(' ') || firstName
+
+    // Sanitize phone to strictly 10 digits
+    const rawPhone = String(order.customer?.phone || '').replace(/\D/g, '')
+    const phone = rawPhone.length >= 10 ? rawPhone.slice(-10) : rawPhone.padStart(10, '0')
+
+    // Calculate total weight from items (minimum 0.5 kg)
+    const calculatedWeight = (order.items || []).reduce((acc, it) => {
+      const itemWeight = Number(it.weight) > 0 ? Number(it.weight) : 0.5
+      return acc + itemWeight * Number(it.qty || it.quantity || 1)
+    }, 0)
+    const weight = Number(Math.max(0.5, calculatedWeight).toFixed(2))
+
+    // Format date as "YYYY-MM-DD HH:mm"
+    let formattedDate
+    try {
+      const dateObj = order.createdAt ? new Date(order.createdAt) : (order.date ? new Date(order.date) : new Date())
+      formattedDate = dateObj.toISOString().replace('T', ' ').substring(0, 16)
+    } catch (_) {
+      formattedDate = new Date().toISOString().replace('T', ' ').substring(0, 16)
+    }
+
+    const isCod =
+      String(order.paymentMethod || '').toLowerCase().includes('cash') ||
+      String(order.paymentMethod || '').toLowerCase().includes('cod')
+
+    return {
+      id: String(order.id),
+      date: formattedDate,
+      total: Number(order.total || 0),
+      cod: isCod,
+      customer: {
+        firstName,
+        lastName,
+        address: String(order.shippingAddress || 'Store Pickup, Anna Nagar'),
+        city: String(order.shippingCity || 'Chennai'),
+        pincode: String(order.shippingZip || '600040'),
+        state: String(order.shippingState || 'Tamil Nadu'),
+        email: String(order.customer?.email || 'customer@esanfoods.com'),
+        phone,
+      },
+      items: (order.items || []).map((it, idx) => ({
+        name: String(it.name || 'Herbal Food Product'),
+        sku: String(it.productId || it.id || `SKU-${idx + 1}`).substring(0, 30),
+        qty: Number(it.qty || it.quantity || 1),
+        price: Number(it.price || 0),
+      })),
+      package: {
+        length: 10,
+        breadth: 10,
+        height: 10,
+        weight,
+      },
+    }
+  }
+
+  const handleCreateShipment = async (order) => {
+    if (creatingShipmentId) return
+
+    // Admin authentication check gate
+    if (adminUser?.role !== 'admin' && !adminUser) {
+      setAdminNotification('Unauthorized: Administrator privilege required to dispatch shipments.')
+      setTimeout(() => setAdminNotification(''), 4000)
+      return
+    }
+
+    setCreatingShipmentId(order.id)
+    setAdminNotification(`Generating Shiprocket shipment for order #${order.id}...`)
+
+    try {
+      const payload = mapOrderToShiprocketShape(order)
+      const result = await createShipment(payload)
+
+      const shiprocketOrderId = result?.shiprocket_order_id ? String(result.shiprocket_order_id) : null
+      const shipmentId = result?.shipment_id ? Number(result.shipment_id) : null
+      const awbCode = result?.awb_code ? String(result.awb_code) : null
+
+      const updated = await updateOrderShipment(order.id, {
+        shiprocketOrderId,
+        shipmentId,
+        awbCode,
+        shippingStatus: 'Shipment Created',
+        shippedAt: new Date().toISOString(),
+      })
+
+      // Update state
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.id === order.id
+            ? {
+                ...o,
+                status: 'Shipped',
+                shiprocketOrderId,
+                shipmentId,
+                awbCode,
+                shippingStatus: 'Shipment Created',
+                shippedAt: updated?.shippedAt || new Date().toISOString(),
+              }
+            : o
+        )
+      )
+
+      setAdminNotification(`Shipment successfully generated. AWB: ${awbCode || 'Assigned'}`)
+      setTimeout(() => setAdminNotification(''), 4500)
+    } catch (err) {
+      console.error('Shiprocket creation error:', err)
+      setAdminNotification(`Failed to create shipment: ${err.message || 'Check edge function logs'}`)
+      setTimeout(() => setAdminNotification(''), 5000)
+    } finally {
+      setCreatingShipmentId(null)
     }
   }
 
@@ -1523,20 +1644,21 @@ export default function AdminDashboard({
                         <th>Customer</th>
                         <th>Total</th>
                         <th>Status</th>
+                        <th>Shipment</th>
                         <th>Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ordersLoading ? (
                         <tr>
-                          <td colSpan="5" style={{ textAlign: 'center', padding: '24px 10px', color: 'var(--color-text-muted)' }}>
+                          <td colSpan="6" style={{ textAlign: 'center', padding: '24px 10px', color: 'var(--color-text-muted)' }}>
                             <div className="media-spinner" style={{ margin: '0 auto 8px', width: '20px', height: '20px' }}></div>
                             Loading recent database orders...
                           </td>
                         </tr>
                       ) : orders.length === 0 ? (
                         <tr>
-                          <td colSpan="5" style={{ textAlign: 'center', padding: '24px 10px', color: 'var(--color-text-muted)' }}>
+                          <td colSpan="6" style={{ textAlign: 'center', padding: '24px 10px', color: 'var(--color-text-muted)' }}>
                             No orders placed yet.
                           </td>
                         </tr>
@@ -1554,6 +1676,25 @@ export default function AdminDashboard({
                               <span className={`status-pill status-${(order.status || 'processing').toLowerCase()}`}>
                                 {order.status}
                               </span>
+                            </td>
+                            <td>
+                              {order.awbCode ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <Truck size={11} className="text-emerald-700" />
+                                  {order.awbCode}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCreateShipment(order)}
+                                  disabled={creatingShipmentId === order.id}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-800 text-white hover:bg-emerald-900 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                                  title="Create shipment on Shiprocket"
+                                >
+                                  <Truck size={11} />
+                                  <span>{creatingShipmentId === order.id ? 'Creating...' : 'Ship'}</span>
+                                </button>
+                              )}
                             </td>
                             <td>
                               <select
@@ -3783,6 +3924,7 @@ export default function AdminDashboard({
                         <th>Total</th>
                         <th>Payment</th>
                         <th>Status</th>
+                        <th>Shipment</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -3820,6 +3962,30 @@ export default function AdminDashboard({
                               <option value="Delivered">Delivered</option>
                               <option value="Cancelled">Cancelled</option>
                             </select>
+                          </td>
+                          <td>
+                            {order.awbCode ? (
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className="inline-flex items-center gap-1 text-xs font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <Truck size={12} className="text-emerald-700" />
+                                  AWB: {order.awbCode}
+                                </span>
+                                <span className="text-[11px] text-slate-500">
+                                  {order.shippingStatus || 'Shipment Created'}
+                                </span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleCreateShipment(order)}
+                                disabled={creatingShipmentId === order.id}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-800 text-white hover:bg-emerald-900 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
+                                title="Create shipment on Shiprocket"
+                              >
+                                <Truck size={13} />
+                                <span>{creatingShipmentId === order.id ? 'Creating...' : 'Create Shipment'}</span>
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -4046,6 +4212,48 @@ export default function AdminDashboard({
                 >
                   <Copy size={15} />
                   <span>Copy site_content SQL</span>
+                </button>
+                <a
+                  href="https://supabase.com/dashboard/project/tacyfcsyswlwbdtminnz/sql/new"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-pill-outline"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <ExternalLink size={15} />
+                  <span>Open Supabase SQL Editor</span>
+                </a>
+              </div>
+            </div>
+
+            {/* User Carts Dedicated Schema Migration Box */}
+            <div className="admin-settings-card" style={{ marginTop: '20px' }}>
+              <div className="settings-header">
+                <ShoppingBag size={24} className="text-forest" />
+                <div>
+                  <h3>Dedicated User Carts Table (public.user_carts)</h3>
+                  <p>
+                    Execute this SQL query in your Supabase SQL Editor to enable a dedicated PostgreSQL table for user cart persistence with Row Level Security.
+                  </p>
+                </div>
+              </div>
+
+              <pre className="rls-sql-block" style={{ maxHeight: '200px' }}>
+                <code>{SQL_CART_MIGRATION}</code>
+              </pre>
+
+              <div className="settings-actions-group">
+                <button
+                  type="button"
+                  className="btn-pill-primary"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(SQL_CART_MIGRATION)
+                    setAdminNotification('User Carts SQL query copied to clipboard! 📋')
+                    setTimeout(() => setAdminNotification(''), 3000)
+                  }}
+                >
+                  <Copy size={15} />
+                  <span>Copy user_carts SQL</span>
                 </button>
                 <a
                   href="https://supabase.com/dashboard/project/tacyfcsyswlwbdtminnz/sql/new"

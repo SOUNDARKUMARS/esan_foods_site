@@ -1,162 +1,11 @@
 import { supabase } from '../lib/supabase.js'
+import { fetchUserOrders } from './orderService.js'
+import { getAdminOrders } from './adminData.js'
 
 const STORAGE_KEY = 'esan_customer_reviews_v1'
 
-// Rich, authentic seeded reviews for products
-const INITIAL_REVIEWS = [
-  // Guava Juice / Mudakathan Herbal
-  {
-    id: 'rev-1',
-    productId: 'guava-juice',
-    name: 'S. Ramanathan',
-    role: 'Verified Buyer',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-    title: 'Authentic traditional taste, feels truly pure',
-    comment: 'The quality of Esan Foods is unmatched. The herbal blend is authentic, traditional, and 100% natural. After 2 weeks of daily intake I feel much lighter and energetic.',
-    rating: 5,
-    date: '2026-09-28',
-    helpfulCount: 24,
-    verified: true,
-  },
-  {
-    id: 'rev-2',
-    productId: 'guava-juice',
-    name: 'Meenakshi Sundaram',
-    role: 'Verified Buyer',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&q=80',
-    title: 'Great herbal remedy for joint comfort',
-    comment: 'My grandmother used to prepare fresh mudakathan soup back in the village. This brings back the same aroma and wholesome taste without any artificial additives.',
-    rating: 5,
-    date: '2026-10-02',
-    helpfulCount: 18,
-    verified: true,
-  },
-  {
-    id: 'rev-3',
-    productId: 'guava-juice',
-    name: 'Arun Karthik',
-    role: 'Verified Buyer',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80',
-    title: 'Very good quality packaging & fast delivery',
-    comment: 'Clean glass jar packing and completely intact seal. Natural herbaceous aroma. Highly recommend to everyone looking for pure Tamil traditional herbs.',
-    rating: 4,
-    date: '2026-10-05',
-    helpfulCount: 9,
-    verified: true,
-  },
-
-  // Tender Coconut Water / Elaneer
-  {
-    id: 'rev-4',
-    productId: 'coconut-water',
-    name: 'Jason Miller',
-    role: 'Fitness Enthusiast',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80',
-    title: 'Zero added sugar, pure natural hydration',
-    comment: 'I love how pure and natural these food products are. No chemicals, no preservatives, just clean traditional health and instant electrolyte replenishment.',
-    rating: 5,
-    date: '2026-09-30',
-    helpfulCount: 31,
-    verified: true,
-  },
-  {
-    id: 'rev-5',
-    productId: 'coconut-water',
-    name: 'Deepa Lakshmi',
-    role: 'Verified Buyer',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80',
-    title: 'Crisp, sweet, and ultra refreshing',
-    comment: 'Our whole family drinks this after morning yoga. Light and sweet just like drinking fresh tender coconut straight from Pollachi farm.',
-    rating: 5,
-    date: '2026-10-04',
-    helpfulCount: 14,
-    verified: true,
-  },
-  {
-    id: 'rev-6',
-    productId: 'coconut-water',
-    name: 'M. Venkatesh',
-    role: 'Verified Buyer',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=120&q=80',
-    title: 'Very refreshing drink',
-    comment: 'Tastes very crisp and natural. Price is fair for genuine certified quality.',
-    rating: 4,
-    date: '2026-10-07',
-    helpfulCount: 5,
-    verified: true,
-  },
-
-  // Tinned Passion
-  {
-    id: 'rev-7',
-    productId: 'tinned-passion',
-    name: 'Emily Carter',
-    role: 'Marketing Manager',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80',
-    title: 'Clean natural stamina throughout the day',
-    comment: 'My daily routine now includes Esan Foods herbal nutrition. Gives me clean natural stamina and vitality without coffee jitters.',
-    rating: 5,
-    date: '2026-09-25',
-    helpfulCount: 22,
-    verified: true,
-  },
-  {
-    id: 'rev-8',
-    productId: 'tinned-passion',
-    name: 'Kavitha Natarajan',
-    role: 'Verified Buyer',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120&q=80',
-    title: 'Tangy and invigorating herbal blend',
-    comment: 'Very pleasing taste, not overly sweet. You can feel the real natural pulp and wellness herbs.',
-    rating: 5,
-    date: '2026-10-06',
-    helpfulCount: 11,
-    verified: true,
-  },
-
-  // Soursop Juice / Mulluseetha
-  {
-    id: 'rev-9',
-    productId: 'soursop-juice',
-    name: 'Daniel Rodriguez',
-    role: 'Wellness Coach',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80',
-    title: 'Delightful surprise for my wellness clients',
-    comment: 'You can really taste the premium quality. It does not feel overly sweet, just right. Soursop juice was a delightful surprise for my clients looking for rich antioxidants!',
-    rating: 5,
-    date: '2026-09-20',
-    helpfulCount: 19,
-    verified: true,
-  },
-  {
-    id: 'rev-10',
-    productId: 'soursop-juice',
-    name: 'Suresh Kumar',
-    role: 'Verified Buyer',
-    avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=120&q=80',
-    title: 'Hard-to-find fruit juice prepared cleanly',
-    comment: 'Fresh mulluseetha is rarely available in cities. Finding it in pure cold-pressed form with zero preservatives made my day. Excellent quality.',
-    rating: 5,
-    date: '2026-10-08',
-    helpfulCount: 12,
-    verified: true,
-  },
-
-  // Sparkling Strawberry
-  {
-    id: 'rev-11',
-    productId: 'sparkling-strawberry',
-    name: 'Sophia Chen',
-    role: 'Culinary Designer',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120&q=80',
-    title: 'Our party favorite! Crisp berry notes',
-    comment: 'The Sparkling Strawberry is our party favorite! Subtle bubbles, crisp berry notes, and clean natural ingredients.',
-    rating: 5,
-    date: '2026-09-15',
-    helpfulCount: 17,
-    verified: true,
-  },
-]
+// No hardcoded seed reviews - all reviews must come from verified customers who received delivery
+const INITIAL_REVIEWS = []
 
 // Subscribers listener set
 const listeners = new Set()
@@ -174,7 +23,7 @@ function notifyListeners() {
 let memoryReviewsCache = null
 
 /**
- * Load all reviews from localStorage (or fallback to INITIAL_REVIEWS)
+ * Load all reviews from localStorage (cleans out any stale mock seed reviews)
  */
 export function getAllReviews() {
   if (typeof localStorage !== 'undefined') {
@@ -182,16 +31,21 @@ export function getAllReviews() {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          memoryReviewsCache = parsed
-          return parsed
+        if (Array.isArray(parsed)) {
+          // Filter out legacy mock seed reviews (rev-1 through rev-11)
+          const realReviews = parsed.filter(
+            (r) => !r.id || !/^rev-([1-9]|1[0-1])$/.test(String(r.id))
+          )
+          memoryReviewsCache = realReviews
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(realReviews))
+          return realReviews
         }
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_REVIEWS))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]))
     } catch (_) {}
   }
   if (!memoryReviewsCache) {
-    memoryReviewsCache = [...INITIAL_REVIEWS]
+    memoryReviewsCache = []
   }
   return memoryReviewsCache
 }
@@ -222,18 +76,19 @@ export function getReviewsForProduct(productId) {
 }
 
 /**
- * Calculate the comprehensive rating breakdown for a product
+ * Calculate the comprehensive rating breakdown for a product.
+ * Returns true calculated statistics, zero when no reviews exist (no hardcoded fallback).
  */
 export function getRatingSummary(productId) {
   const reviews = getReviewsForProduct(productId)
-  
+
   if (reviews.length === 0) {
     return {
-      average: 5.0,
+      average: 0,
       totalCount: 0,
       distribution: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
       percentages: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
-      recommendedPercentage: 100,
+      recommendedPercentage: 0,
     }
   }
 
@@ -271,8 +126,176 @@ export function getRatingSummary(productId) {
 }
 
 /**
- * Add a new customer review (from user side)
- * Non-editable by admin; strictly created from user feedback
+ * Helper to test if an order line item matches a target productId or productName
+ */
+function orderMatchesProduct(order, productId, productName = '') {
+  if (!order || !order.items || !Array.isArray(order.items)) return false
+  const targetId = String(productId || '').toLowerCase().trim()
+  const targetName = String(productName || '').toLowerCase().trim()
+
+  return order.items.some((item) => {
+    const itemId = String(item.productId || item.product_id || item.id || '').toLowerCase().trim()
+    if (targetId && itemId === targetId) return true
+
+    const itemName = String(item.name || item.product_name || '').toLowerCase().trim()
+    if (targetName && (itemName.includes(targetName) || targetName.includes(itemName))) return true
+    if (targetId && itemName.includes(targetId)) return true
+
+    return false
+  })
+}
+
+/**
+ * Verification check: Only users who ordered this product AND whose order is marked 'Delivered'
+ * are allowed to write a review.
+ * Supports:
+ * 1. Logged in user (currentUser)
+ * 2. Manual verification via Order ID + Customer Email (for guests or direct lookup)
+ */
+export async function checkOrderDeliveryStatus({
+  productId,
+  productName = '',
+  currentUser = null,
+  orderId = null,
+  email = null,
+}) {
+  if (!productId) {
+    return { eligible: false, reason: 'NO_PRODUCT' }
+  }
+
+  let candidateOrders = []
+
+  // 1. If currentUser is logged in, fetch their orders from Supabase & local storage
+  if (currentUser) {
+    try {
+      const userOrders = await fetchUserOrders(
+        currentUser.supabaseId || currentUser.id,
+        currentUser.email
+      )
+      if (Array.isArray(userOrders)) {
+        candidateOrders.push(...userOrders)
+      }
+    } catch (_) {}
+
+    // Also check local admin orders
+    try {
+      const localOrders = getAdminOrders()
+      if (Array.isArray(localOrders)) {
+        const userMatches = localOrders.filter(
+          (o) =>
+            (currentUser.id && o.userId === currentUser.id) ||
+            (currentUser.email &&
+              String(o.customer?.email || '').toLowerCase() ===
+                String(currentUser.email).toLowerCase())
+        )
+        userMatches.forEach((mo) => {
+          if (!candidateOrders.some((co) => co.id === mo.id)) {
+            candidateOrders.push(mo)
+          }
+        })
+      }
+    } catch (_) {}
+  }
+
+  // 2. If manual orderId and email are provided (guest verification or order number lookup)
+  if (orderId && email) {
+    const searchId = String(orderId).trim().toUpperCase()
+    const searchEmail = String(email).trim().toLowerCase()
+
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, order_items(*)')
+        .eq('id', searchId)
+        .ilike('customer_email', searchEmail)
+        .single()
+
+      if (!error && data) {
+        // Transform Supabase structure
+        const transformed = {
+          id: data.id,
+          status: data.status,
+          customer: {
+            name: data.customer_name || 'Guest Shopper',
+            email: data.customer_email || searchEmail,
+          },
+          items: Array.isArray(data.order_items)
+            ? data.order_items.map((i) => ({
+                id: i.id,
+                productId: i.product_id,
+                name: i.product_name,
+              }))
+            : [],
+        }
+        if (!candidateOrders.some((co) => co.id === transformed.id)) {
+          candidateOrders.push(transformed)
+        }
+      }
+    } catch (_) {}
+
+    // Also check local orders for matching orderId and email
+    try {
+      const localOrders = getAdminOrders()
+      const match = localOrders.find(
+        (o) =>
+          String(o.id || '').trim().toUpperCase() === searchId &&
+          String(o.customer?.email || '').trim().toLowerCase() === searchEmail
+      )
+      if (match && !candidateOrders.some((co) => co.id === match.id)) {
+        candidateOrders.push(match)
+      }
+    } catch (_) {}
+  }
+
+  if (candidateOrders.length === 0) {
+    if (!currentUser && !orderId) {
+      return { eligible: false, reason: 'NOT_LOGGED_IN' }
+    }
+    if (orderId) {
+      return { eligible: false, reason: 'ORDER_NOT_FOUND' }
+    }
+    return { eligible: false, reason: 'NOT_PURCHASED' }
+  }
+
+  // 3. Filter orders that contain this specific product
+  const relevantOrders = candidateOrders.filter((ord) =>
+    orderMatchesProduct(ord, productId, productName)
+  )
+
+  if (relevantOrders.length === 0) {
+    return {
+      eligible: false,
+      reason: orderId ? 'PRODUCT_NOT_IN_ORDER' : 'NOT_PURCHASED',
+    }
+  }
+
+  // 4. Check if any order is marked 'Delivered'
+  const deliveredOrder = relevantOrders.find(
+    (o) => String(o.status || '').toLowerCase() === 'delivered'
+  )
+
+  if (deliveredOrder) {
+    return {
+      eligible: true,
+      reason: 'DELIVERED',
+      order: deliveredOrder,
+      customerName: deliveredOrder.customer?.name || currentUser?.name || '',
+      customerEmail: deliveredOrder.customer?.email || currentUser?.email || '',
+    }
+  }
+
+  // Order exists with this product, but not delivered yet
+  const latestOrder = relevantOrders[0]
+  return {
+    eligible: false,
+    reason: 'NOT_DELIVERED',
+    order: latestOrder,
+    status: latestOrder.status || 'Processing',
+  }
+}
+
+/**
+ * Add a new customer review (only for verified delivered purchases)
  */
 export async function addCustomerReview({
   productId,
@@ -281,18 +304,19 @@ export async function addCustomerReview({
   title,
   comment,
   verified = true,
+  orderId = null,
 }) {
   if (!productId) throw new Error('Product ID is required')
   const numRating = Math.min(5, Math.max(1, Number(rating) || 5))
-  const reviewerName = (name && name.trim()) || 'Happy Customer'
+  const reviewerName = (name && name.trim()) || 'Verified Buyer'
   const reviewComment = (comment && comment.trim()) || ''
   const reviewTitle = (title && title.trim()) || 'Verified Customer Review'
 
   const newReview = {
-    id: `rev-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    id: `rev-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
     productId: String(productId).trim(),
     name: reviewerName,
-    role: verified ? 'Verified Buyer' : 'Customer',
+    role: 'Verified Buyer',
     avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(reviewerName)}&backgroundColor=059669,10b981`,
     title: reviewTitle,
     comment: reviewComment,
@@ -300,6 +324,7 @@ export async function addCustomerReview({
     date: new Date().toISOString().split('T')[0],
     helpfulCount: 0,
     verified: Boolean(verified),
+    orderId: orderId || null,
   }
 
   const all = getAllReviews()

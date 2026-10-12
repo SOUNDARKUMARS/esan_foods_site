@@ -41,7 +41,7 @@ export default function ProductModal({
   const [activeTab, setActiveTab] = useState('overview') // 'overview' | 'nutrition' | 'ingredients'
   const [selectedOptId, setSelectedOptId] = useState(null)
   const [ratingSummary, setRatingSummary] = useState(() =>
-    product ? getRatingSummary(product.id) : { average: 5.0, totalCount: 0 }
+    product ? getRatingSummary(product.id) : { average: 0, totalCount: 0 }
   )
 
   useEffect(() => {
@@ -253,15 +253,23 @@ export default function ProductModal({
                     <Star
                       key={i}
                       size={14}
-                      className={i < Math.round(ratingSummary.average) ? 'star-filled' : 'star-empty'}
-                      fill={i < Math.round(ratingSummary.average) ? 'currentColor' : 'none'}
+                      className={ratingSummary.totalCount > 0 && i < Math.round(ratingSummary.average) ? 'star-filled' : 'star-empty'}
+                      fill={ratingSummary.totalCount > 0 && i < Math.round(ratingSummary.average) ? 'currentColor' : 'none'}
                     />
                   ))}
                 </div>
-                <span className="rating-num">{ratingSummary.average.toFixed(1)}</span>
-                <span className="reviews-num">
-                  ({ratingSummary.totalCount} {lang === 'ta' ? 'வாடிக்கையாளர் மதிப்புரைகள்' : 'customer reviews'})
-                </span>
+                {ratingSummary.totalCount > 0 ? (
+                  <>
+                    <span className="rating-num">{ratingSummary.average.toFixed(1)}</span>
+                    <span className="reviews-num">
+                      ({ratingSummary.totalCount} {lang === 'ta' ? 'வாடிக்கையாளர் மதிப்புரைகள்' : 'customer reviews'})
+                    </span>
+                  </>
+                ) : (
+                  <span className="reviews-num" style={{ color: '#64748b' }}>
+                    {lang === 'ta' ? 'மதிப்புரைகள் இன்னும் இல்லை' : 'No reviews yet'}
+                  </span>
+                )}
                 {onOpenDetail && (
                   <span className="reviews-jump-link">
                     {lang === 'ta' ? 'விமர்சனங்கள் பார்க்க →' : 'Read & write reviews →'}

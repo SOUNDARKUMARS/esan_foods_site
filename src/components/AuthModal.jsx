@@ -38,6 +38,7 @@ import {
 } from '../data/authService'
 import { fetchUserOrders } from '../data/orderService'
 import { supabase } from '../lib/supabase'
+import OrderTracking from './OrderTracking'
 
 export default function AuthModal({
   isOpen,
@@ -332,7 +333,7 @@ export default function AuthModal({
     if (res.success) {
       if (res.needsOtp) {
         setSignupOtpSent(true)
-        setSuccessNotice(`Verification code sent to ${cleanEmail}. Enter it below to finish registration!`)
+        setSuccessNotice('')
       } else {
         // Direct signup without OTP confirmation (if Supabase config didn't enforce it)
         setSuccessNotice('Account registered successfully! Welcome to Esan Foods.')
@@ -411,7 +412,7 @@ export default function AuthModal({
 
     if (res.success) {
       setFallbackOtpSent(true)
-      setSuccessNotice(`One-time sign-in code sent to ${cleanEmail}!`)
+      setSuccessNotice('')
     } else {
       setErrorMsg(res.error || 'Failed to send OTP code.')
     }
@@ -777,6 +778,14 @@ export default function AuthModal({
                           </div>
                         </div>
 
+                        {/* Shipment Tracking View */}
+                        <OrderTracking
+                          awb={ord.awbCode || ord.awb_code}
+                          orderId={ord.id}
+                          shippingStatus={ord.shippingStatus || ord.shipping_status}
+                          className="mt-3 mb-1"
+                        />
+
                         {/* Order Actions: Buy Again, Invoice */}
                         <div className="user-order-footer-actions">
                           <button
@@ -823,11 +832,11 @@ export default function AuthModal({
               <p className="auth-sub">
                 {activeTab === 'signin'
                   ? useOtpSignIn
-                    ? 'Enter your email to receive a temporary one-time passcode.'
-                    : 'Sign in directly with your email and password — no OTP needed!'
+                    ? 'Enter your email to receive a temporary sign-in code.'
+                    : 'Sign in to your account with your email & password.'
                   : signupOtpSent
-                    ? `Enter the 6-digit verification code sent to ${regEmail} to activate your account.`
-                    : 'Set up your password now so you can log in instantly in the future.'}
+                    ? 'Enter the 6-digit verification code to activate your account.'
+                    : 'Create your account to order and track shipments.'}
               </p>
             </div>
 
@@ -1152,7 +1161,7 @@ export default function AuthModal({
                     </div>
 
                     <p className="auth-password-hint">
-                      🛡️ Enter your password now. We'll verify your email with a quick OTP, and you won't need OTP to sign in later.
+                      At least 6 characters. You will use this password to sign in.
                     </p>
 
                     <button
@@ -1245,17 +1254,7 @@ export default function AuthModal({
                       </button>
                     </div>
 
-                    <div className="auth-switch-prompt">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSignupOtpSent(false)
-                          setErrorMsg('')
-                        }}
-                      >
-                        ← Edit registration details
-                      </button>
-                    </div>
+
                   </form>
                 )}
               </div>

@@ -161,7 +161,7 @@ export function formatProductFromDb(row) {
     originalPrice: row.original_price ? Number(row.original_price) : undefined,
     original_price: row.original_price,
     category: row.category || 'Herbal Leaf Powders',
-    rating: Number(row.rating) || 5.0,
+    rating: row.rating !== null && row.rating !== undefined ? Number(row.rating) : 0,
     reviewsCount: Number(row.reviews_count) || 0,
     reviews_count: row.reviews_count,
     badge: row.badge || '',

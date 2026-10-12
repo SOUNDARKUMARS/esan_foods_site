@@ -363,6 +363,32 @@
   transform: translateY(-2px);
 }
 
+.btn-pill-subtle {
+  background: #ffffff;
+  color: #1e293b;
+  border: 1.5px solid #cbd5e1;
+  border-radius: var(--radius-pill);
+  padding: 10px 22px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: inherit;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.btn-pill-subtle:hover {
+  background: #f8fafc;
+  border-color: #059669;
+  color: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(5, 150, 105, 0.12);
+}
+
 .w-full {
   width: 100%;
 }
@@ -3276,6 +3302,49 @@
   color: #ffffff;
 }
 
+.toast-card-clickable {
+  cursor: pointer;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, background 0.22s ease, border-color 0.22s ease;
+  user-select: none;
+}
+
+.toast-card-clickable:hover {
+  transform: translateY(-2px);
+  background: #22381e;
+  border-color: rgba(74, 222, 128, 0.45);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.38), 0 0 20px rgba(74, 222, 128, 0.15);
+}
+
+.toast-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.toast-action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(74, 222, 128, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  padding: 2px 9px;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.toast-card-clickable:hover .toast-action-pill {
+  background: #4ade80;
+  color: #122110;
+  border-color: #4ade80;
+  transform: scale(1.05);
+}
+
 /* ==========================================================================
    RESPONSIVE DESIGN (Tablets & Mobile Phone)
    ========================================================================== */
@@ -3329,9 +3398,52 @@ html, body {
     -webkit-backdrop-filter: blur(12px);
   }
 
+  .header-inner {
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .brand-logo {
+    gap: 8px;
+    min-width: 0;
+    flex-shrink: 0;
+  }
+
+  .brand-logo-img {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+  }
+
+  .logo-text-wrap {
+    min-width: 0;
+  }
+
+  .brand-name {
+    font-size: 1.25rem;
+    white-space: nowrap;
+    line-height: 1.1;
+  }
+
+  .brand-badge {
+    display: none !important;
+  }
+
   .header-actions {
     gap: 6px;
     flex-shrink: 0;
+    align-items: center;
+  }
+
+  /* Hide desktop language pill in top header bar on mobile/tablets */
+  .header-actions .nav-lang-pill-wrapper,
+  .nav-lang-desktop {
+    display: none !important;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
   }
 
   .navbar-admin-dash-btn {
@@ -3356,6 +3468,12 @@ html, body {
     display: inline-block;
   }
 
+  .login-btn-pill {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    gap: 4px;
+  }
+
   .desktop-nav {
     display: none;
   }
@@ -3366,6 +3484,28 @@ html, body {
     height: 38px;
     align-items: center;
     justify-content: center;
+  }
+
+  .search-wrap {
+    position: static;
+  }
+
+  .search-input-box {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    right: 10px;
+    transform: translateY(-50%);
+    z-index: 50;
+    width: auto;
+    background: #ffffff;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.16);
+    border: 1.5px solid var(--color-primary-dark);
+  }
+
+  .search-input-box input {
+    width: 100% !important;
+    flex: 1;
   }
 
   .mobile-nav-panel {
@@ -4168,12 +4308,38 @@ html, body {
 }
 
 @media (max-width: 480px) {
+  .site-header {
+    padding: 8px 10px;
+  }
+
+  .header-inner {
+    gap: 4px;
+  }
+
+  .brand-logo {
+    gap: 6px;
+  }
+
+  .brand-logo-img {
+    width: 34px;
+    height: 34px;
+  }
+
   .brand-name {
-    font-size: 1.12rem;
+    font-size: 1.15rem;
   }
 
   .brand-badge {
-    display: none;
+    display: none !important;
+  }
+
+  .header-actions {
+    gap: 4px;
+  }
+
+  .icon-btn {
+    width: 34px;
+    height: 34px;
   }
 
   .navbar-admin-dash-btn {
@@ -4187,12 +4353,27 @@ html, body {
   .user-pill-btn {
     padding: 6px !important;
     border-radius: 50% !important;
-    width: 32px !important;
-    height: 32px !important;
+    width: 34px !important;
+    height: 34px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    min-width: 32px !important;
+    min-width: 34px !important;
+  }
+
+  .login-btn-pill {
+    padding: 6px !important;
+    border-radius: 50% !important;
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .login-btn-pill span {
+    display: none !important;
   }
 
   .search-input-box {
@@ -4200,8 +4381,7 @@ html, body {
   }
 
   .search-input-box input {
-    width: 120px;
-    font-size: 0.8rem;
+    font-size: 0.82rem;
   }
 }
 
@@ -13069,11 +13249,192 @@ html, body {
 
 .no-reviews-box {
   text-align: center;
-  padding: 40px 20px;
+  padding: 48px 24px;
   background: #ffffff;
   border: 1.5px dashed #cbd5e1;
-  border-radius: 16px;
+  border-radius: 20px;
   color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.no-reviews-icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.no-reviews-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0;
+}
+
+.no-reviews-subtext {
+  font-size: 0.9rem;
+  color: #64748b;
+  max-width: 480px;
+  line-height: 1.5;
+  margin: 0 auto;
+}
+
+.no-reviews-actions-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.review-action-btn {
+  margin-top: 10px;
+}
+
+/* Delivered order notice inside empty reviews */
+.order-status-notice-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 14px;
+  padding: 16px 20px;
+  max-width: 540px;
+  text-align: left;
+  margin: 8px auto 0;
+  color: #166534;
+}
+
+.order-status-notice-card strong {
+  display: block;
+  font-size: 0.92rem;
+  color: #15803d;
+  margin-bottom: 2px;
+}
+
+.order-status-notice-card p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #166534;
+  line-height: 1.45;
+}
+
+/* Verification Box Card */
+.verification-box-card {
+  background: #ffffff;
+  border: 2px solid #10b981;
+  border-radius: 20px;
+  padding: 24px 28px;
+  margin-bottom: 28px;
+  box-shadow: 0 10px 30px rgba(16, 185, 129, 0.1);
+}
+
+.verification-box-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 14px;
+}
+
+.verification-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.verification-title-group h4 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 2px 0;
+}
+
+.verification-title-group p {
+  font-size: 0.84rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.verification-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: end;
+}
+
+@media (max-width: 768px) {
+  .verification-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.verification-submit-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.verification-alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  margin-top: 16px;
+}
+
+.verification-alert-banner.alert-success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.verification-alert-banner.alert-info {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e40af;
+}
+
+.verification-alert-banner.alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+}
+
+.verified-delivery-badge-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+  padding: 3px 10px;
+  border-radius: 9999px;
+  margin-top: 4px;
+}
+
+.rating-recommend-chip.empty-chip {
+  background: #f1f5f9;
+  color: #64748b;
+  font-weight: 600;
 }
 
 /* ==========================================================================

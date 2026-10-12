@@ -62,9 +62,9 @@ export default function Navbar({
           <a href="#spotlight" className="nav-link">
             {lang === 'ta' ? 'தயாரிப்பு' : 'Product'}
           </a>
-          <a href="#reviews" className="nav-link">
+          {/* <a href="#reviews" className="nav-link">
             {lang === 'ta' ? 'மதிப்புரைகள்' : 'Reviews'}
-          </a>
+          </a> */}
           <a href="#benefits" className="nav-link">
             {lang === 'ta' ? 'ஏன் ஈசன் புட்ஸ்' : 'Why Esan Foods'}
           </a>
@@ -76,7 +76,7 @@ export default function Navbar({
         {/* Right Action Icons */}
         <div className="header-actions">
           {/* Language Switcher Pill (Desktop) */}
-          <div className="nav-lang-pill-wrapper" title="Change Language / மொழியை மாற்றുക">
+          <div className="nav-lang-pill-wrapper nav-lang-desktop" title="Change Language / மொழியை மாற்றുക">
             <button
               type="button"
               className={`nav-lang-btn ${lang === 'en' ? 'active' : ''}`}
@@ -270,9 +270,9 @@ export default function Navbar({
           <a href="#spotlight" onClick={() => setMobileMenuOpen(false)}>
             {lang === 'ta' ? 'சிறப்புத் தேர்வு' : 'Featured Product'}
           </a>
-          <a href="#reviews" onClick={() => setMobileMenuOpen(false)}>
+          {/* <a href="#reviews" onClick={() => setMobileMenuOpen(false)}>
             {lang === 'ta' ? 'வாடிக்கையாளர் மதிப்புரைகள்' : 'Customer Reviews'}
-          </a>
+          </a> */}
           <a href="#benefits" onClick={() => setMobileMenuOpen(false)}>
             {lang === 'ta' ? 'ஏன் ஈசன் புட்ஸ்' : "Why You'll Love It"}
           </a>
