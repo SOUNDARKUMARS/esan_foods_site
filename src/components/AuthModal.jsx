@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   X,
   Mail,
@@ -27,6 +28,9 @@ import {
   RotateCcw,
   FileText,
   Calendar,
+  Phone,
+  Edit3,
+  Loader2,
 } from 'lucide-react'
 import {
   signInWithEmailPassword,
@@ -35,7 +39,9 @@ import {
   resendSignupOtp,
   sendSupabaseEmailOtp,
   verifySupabaseEmailOtp,
+  updateUserPhone,
 } from '../data/authService'
+import { normalizeIndianPhone, isValidIndianPhone } from '../services/shiprocket'
 import { fetchUserOrders } from '../data/orderService'
 import { supabase } from '../lib/supabase'
 import OrderTracking from './OrderTracking'
@@ -58,14 +64,23 @@ export default function AuthModal({
   const [showSignInPassword, setShowSignInPassword] = useState(false)
   const [useOtpSignIn, setUseOtpSignIn] = useState(false) // optional OTP fallback for sign-in
 
-  // Sign Up state (Name, Email, Password, then OTP verification)
+  // Sign Up state (Name, Email, Phone, Password, then OTP verification)
   const [regName, setRegName] = useState('')
   const [regEmail, setRegEmail] = useState('')
+  const [regPhone, setRegPhone] = useState('')
+  const [regPhoneError, setRegPhoneError] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regConfirmPassword, setRegConfirmPassword] = useState('')
   const [showRegPassword, setShowRegPassword] = useState(false)
   const [signupOtpSent, setSignupOtpSent] = useState(false)
   const [signupOtpToken, setSignupOtpToken] = useState('')
+
+  // Account Profile Phone Editing state
+  const [isEditingPhone, setIsEditingPhone] = useState(false)
+  const [profilePhone, setProfilePhone] = useState(user?.phone || '')
+  const [profilePhoneError, setProfilePhoneError] = useState('')
+  const [profilePhoneSaving, setProfilePhoneSaving] = useState(false)
+  const [profilePhoneSuccess, setProfilePhoneSuccess] = useState('')
 
   // Passwordless OTP Fallback state (for sign-in)
   const [fallbackOtpSent, setFallbackOtpSent] = useState(false)
@@ -301,20 +316,64 @@ export default function AuthModal({
   }
 
   // -------------------------------------------------------------
-  // 2. SIGN UP WITH NAME, EMAIL & PASSWORD (TRIGGER OTP)
+  // PROFILE PHONE EDITING
+  // -------------------------------------------------------------
+  const handleSaveProfilePhone = async (e) => {
+    e.preventDefault()
+    setProfilePhoneError('')
+    setProfilePhoneSuccess('')
+
+    const clean = normalizeIndianPhone(profilePhone)
+    if (!clean) {
+      setProfilePhoneError('Mobile phone number is required.')
+      return
+    }
+    if (!isValidIndianPhone(clean)) {
+      setProfilePhoneError('Please enter a valid 10-digit Indian mobile number (starts with 6-9).')
+      return
+    }
+
+    setProfilePhoneSaving(true)
+    const res = await updateUserPhone(clean)
+    setProfilePhoneSaving(false)
+
+    if (res.success && res.user) {
+      setProfilePhoneSuccess('Mobile number updated successfully.')
+      setIsEditingPhone(false)
+      onAuthSuccess?.(res.user, res.user.role === 'admin')
+      setTimeout(() => setProfilePhoneSuccess(''), 3500)
+    } else {
+      setProfilePhoneError(res.error || 'Failed to update mobile number.')
+    }
+  }
+
+  // -------------------------------------------------------------
+  // 2. SIGN UP WITH NAME, EMAIL, PHONE & PASSWORD (TRIGGER OTP)
   // -------------------------------------------------------------
   const handleRegisterSubmit = async (e) => {
     e.preventDefault()
     setErrorMsg('')
     setSuccessNotice('')
+    setRegPhoneError('')
 
     const cleanName = regName.trim()
     const cleanEmail = regEmail.trim()
+    const cleanPhone = normalizeIndianPhone(regPhone)
     const cleanPassword = regPassword.trim()
     const cleanConfirm = regConfirmPassword.trim()
 
     if (!cleanEmail) {
       setErrorMsg('Please enter a valid email address.')
+      return
+    }
+    if (!cleanPhone) {
+      setRegPhoneError('Mobile number is required to register.')
+      setErrorMsg('Mobile number is required to create an account.')
+      return
+    }
+    if (!isValidIndianPhone(cleanPhone)) {
+      setRegPhoneError('Please enter a valid 10-digit Indian mobile number (starts with 6-9).')
+      setErrorMsg('Please enter a valid 10-digit Indian mobile number.')
       return
     }
     if (!cleanPassword || cleanPassword.length < 6) {
@@ -327,7 +386,7 @@ export default function AuthModal({
     }
 
     setLoading(true)
-    const res = await registerWithEmailPassword(cleanName, cleanEmail, cleanPassword)
+    const res = await registerWithEmailPassword(cleanName, cleanEmail, cleanPassword, cleanPhone)
     setLoading(false)
 
     if (res.success) {
@@ -504,6 +563,187 @@ export default function AuthModal({
                 <h3 className="profile-name">{user.name}</h3>
                 <p className="profile-email">{user.email}</p>
 
+                {/* Account Mobile Phone Section */}
+                <div
+                  className="profile-phone-card"
+                  style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    margin: '12px 0 16px',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: isEditingPhone ? '8px' : '0',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Phone size={15} style={{ color: '#059669', flexShrink: 0 }} />
+                      <div>
+                        <span
+                          style={{
+                            display: 'block',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            color: '#64748b',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Mobile Number
+                        </span>
+                        {!isEditingPhone && (
+                          <span
+                            style={{
+                              fontSize: '0.88rem',
+                              fontWeight: 600,
+                              color: user.phone ? '#0f172a' : '#94a3b8',
+                            }}
+                          >
+                            {user.phone ? `+91 ${user.phone}` : 'Not provided yet'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {!isEditingPhone && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingPhone(true)
+                          setProfilePhone(user.phone || '')
+                          setProfilePhoneError('')
+                          setProfilePhoneSuccess('')
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: '#059669',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                        }}
+                      >
+                        <Edit3 size={13} />
+                        <span>{user.phone ? 'Edit' : 'Add Phone'}</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {isEditingPhone && (
+                    <form onSubmit={handleSaveProfilePhone} style={{ marginTop: '6px' }}>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          placeholder="Enter 10-digit mobile number"
+                          value={profilePhone}
+                          onChange={(e) => {
+                            setProfilePhone(e.target.value)
+                            if (profilePhoneError && isValidIndianPhone(e.target.value)) {
+                              setProfilePhoneError('')
+                            }
+                          }}
+                          disabled={profilePhoneSaving}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            fontSize: '0.86rem',
+                            border: profilePhoneError ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            background: '#ffffff',
+                            color: '#0f172a',
+                            outline: 'none',
+                          }}
+                          autoFocus
+                        />
+                      </div>
+                      {profilePhoneError && (
+                        <p
+                          style={{
+                            color: '#b91c1c',
+                            fontSize: '0.74rem',
+                            marginTop: '4px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {profilePhoneError}
+                        </p>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        <button
+                          type="submit"
+                          disabled={profilePhoneSaving}
+                          className="btn-pill-primary"
+                          style={{
+                            padding: '6px 14px',
+                            fontSize: '0.8rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                          }}
+                        >
+                          {profilePhoneSaving ? (
+                            <>
+                              <Loader2 size={13} className="animate-spin" />
+                              <span>Saving...</span>
+                            </>
+                          ) : (
+                            <span>Save Number</span>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={profilePhoneSaving}
+                          onClick={() => {
+                            setIsEditingPhone(false)
+                            setProfilePhoneError('')
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            fontSize: '0.8rem',
+                            background: '#f1f5f9',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '9999px',
+                            color: '#475569',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {profilePhoneSuccess && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        color: '#059669',
+                        fontSize: '0.76rem',
+                        fontWeight: 600,
+                        marginTop: '6px',
+                      }}
+                    >
+                      <CheckCircle2 size={13} />
+                      <span>{profilePhoneSuccess}</span>
+                    </div>
+                  )}
+                </div>
+
                 {user.role === 'admin' ? (
                   <div className="admin-status-badge-box">
                     <ShieldCheck size={18} className="text-forest" />
@@ -553,6 +793,18 @@ export default function AuthModal({
                 >
                   Sign Out
                 </button>
+
+                <div style={{ marginTop: '14px', paddingTop: '10px', borderTop: '1px solid #f1f5f9', textAlign: 'center' }}>
+                  <Link
+                    to="/delete-account"
+                    onClick={onClose}
+                    style={{ fontSize: '0.76rem', color: '#94a3b8', textDecoration: 'none', transition: 'color 0.2s' }}
+                    onMouseEnter={(e) => (e.target.style.color = '#dc2626')}
+                    onMouseLeave={(e) => (e.target.style.color = '#94a3b8')}
+                  >
+                    Data Privacy & Delete Account
+                  </Link>
+                </div>
               </div>
             ) : (
               /* TAB 2: User Live Orders View */
@@ -1119,6 +1371,41 @@ export default function AuthModal({
                         disabled={loading}
                       />
                     </div>
+
+                    <div className="auth-input-group">
+                      <Phone size={16} className="auth-input-icon" />
+                      <input
+                        type="tel"
+                        id="signup-phone"
+                        name="phone"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        placeholder="Mobile Number (10-Digit Indian Mobile) *"
+                        value={regPhone}
+                        onChange={(e) => {
+                          setRegPhone(e.target.value)
+                          if (regPhoneError && isValidIndianPhone(e.target.value)) {
+                            setRegPhoneError('')
+                          }
+                        }}
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+                    {regPhoneError && (
+                      <p
+                        style={{
+                          color: '#b91c1c',
+                          fontSize: '0.75rem',
+                          marginTop: '-6px',
+                          marginBottom: '8px',
+                          paddingLeft: '4px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {regPhoneError}
+                      </p>
+                    )}
 
                     <div className="auth-input-group">
                       <Lock size={16} className="auth-input-icon" />

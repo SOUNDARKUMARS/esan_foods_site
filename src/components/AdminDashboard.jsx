@@ -70,7 +70,7 @@ import {
   updateOrderStatus as supabaseUpdateOrderStatus,
   updateOrderShipment,
 } from '../data/orderService'
-import { createShipment } from '../services/shiprocket'
+import { createShipment, normalizeIndianPhone, isValidIndianPhone } from '../services/shiprocket'
 import { getDefaultQuantityOptions, findSingleItemOption } from '../data/productService'
 import { supabase } from '../lib/supabase'
 import esanLogo from '../assets/esan_foods_logo.png'
@@ -577,14 +577,32 @@ export default function AdminDashboard({
   }
 
   const mapOrderToShiprocketShape = (order) => {
-    const rawName = (order.customer?.name || 'Customer').trim()
+    const rawName = String(order.customer?.name || order.customer_name || 'Customer').trim()
     const nameParts = rawName.split(/\s+/)
     const firstName = nameParts[0] || 'Customer'
-    const lastName = nameParts.slice(1).join(' ') || firstName
+    const lastName = nameParts.slice(1).join(' ') || ''
 
-    // Sanitize phone to strictly 10 digits
-    const rawPhone = String(order.customer?.phone || '').replace(/\D/g, '')
-    const phone = rawPhone.length >= 10 ? rawPhone.slice(-10) : rawPhone.padStart(10, '0')
+    // Validate phone without any placeholder fallback
+    const rawPhone = String(order.customer?.phone || order.customer_phone || '').trim()
+    const normalizedPhone = normalizeIndianPhone(rawPhone)
+    if (!isValidIndianPhone(normalizedPhone)) {
+      throw new Error(
+        `Order #${order.id} has an invalid customer mobile number "${rawPhone || 'empty'}". Shiprocket requires a valid 10-digit Indian mobile number (e.g. 9876543210).`
+      )
+    }
+
+    // Address must be 3 to 190 characters in English
+    let cleanAddress = String(order.shippingAddress || order.shipping_address || 'Main Road, Anna Nagar').trim()
+    if (cleanAddress.length < 3) cleanAddress = cleanAddress.padEnd(3, '.')
+    if (cleanAddress.length > 190) cleanAddress = cleanAddress.substring(0, 190)
+
+    // Pincode must be 6 digits
+    const rawZip = String(order.shippingZip || order.shipping_zip || '').replace(/\D/g, '').slice(0, 6)
+    const cleanPincode = rawZip.length === 6 ? rawZip : '600040'
+
+    const cleanCity = String(order.shippingCity || order.shipping_city || 'Chennai').trim() || 'Chennai'
+    const cleanState = String(order.shippingState || order.shipping_state || 'Tamil Nadu').trim() || 'Tamil Nadu'
+    const cleanEmail = String(order.customer?.email || order.customer_email || 'customer@esanfoods.com').trim()
 
     // Calculate total weight from items (minimum 0.5 kg)
     const calculatedWeight = (order.items || []).reduce((acc, it) => {
@@ -597,6 +615,7 @@ export default function AdminDashboard({
     let formattedDate
     try {
       const dateObj = order.createdAt ? new Date(order.createdAt) : (order.date ? new Date(order.date) : new Date())
+      if (isNaN(dateObj.getTime())) throw new Error()
       formattedDate = dateObj.toISOString().replace('T', ' ').substring(0, 16)
     } catch (_) {
       formattedDate = new Date().toISOString().replace('T', ' ').substring(0, 16)
@@ -610,22 +629,22 @@ export default function AdminDashboard({
       id: String(order.id),
       date: formattedDate,
       total: Number(order.total || 0),
-      cod: isCod,
+      cod: Boolean(isCod),
       customer: {
         firstName,
         lastName,
-        address: String(order.shippingAddress || 'Store Pickup, Anna Nagar'),
-        city: String(order.shippingCity || 'Chennai'),
-        pincode: String(order.shippingZip || '600040'),
-        state: String(order.shippingState || 'Tamil Nadu'),
-        email: String(order.customer?.email || 'customer@esanfoods.com'),
-        phone,
+        address: cleanAddress,
+        city: cleanCity,
+        pincode: cleanPincode,
+        state: cleanState,
+        email: cleanEmail,
+        phone: normalizedPhone,
       },
       items: (order.items || []).map((it, idx) => ({
-        name: String(it.name || 'Herbal Food Product'),
-        sku: String(it.productId || it.id || `SKU-${idx + 1}`).substring(0, 30),
+        name: String(it.name || it.product_name || `Herbal Product ${idx + 1}`).substring(0, 100),
+        sku: String(it.productId || it.product_id || it.sku || `SKU-${idx + 1}`).substring(0, 30),
         qty: Number(it.qty || it.quantity || 1),
-        price: Number(it.price || 0),
+        price: Number(it.price || it.unit_price || 0),
       })),
       package: {
         length: 10,
@@ -646,6 +665,51 @@ export default function AdminDashboard({
       return
     }
 
+    // Duplicate protection: prevent calling if shipment_id or awb_code already exists
+    const hasExistingShipment = Boolean(
+      order.shipmentId ||
+      order.shipment_id ||
+      order.awbCode ||
+      order.awb_code
+    )
+    if (hasExistingShipment) {
+      setAdminNotification(
+        `Order #${order.id} already has a shipment assigned (AWB: ${order.awbCode || order.awb_code || order.shipmentId || 'Assigned'}).`
+      )
+      setTimeout(() => setAdminNotification(''), 4500)
+      return
+    }
+
+    // Check if customer phone is missing or invalid on this order
+    const rawOrderPhone = String(order.customer?.phone || order.customer_phone || '').trim()
+    let phoneToUse = normalizeIndianPhone(rawOrderPhone)
+    if (!isValidIndianPhone(phoneToUse)) {
+      const enteredPhone = window.prompt(
+        `Order #${order.id} does not have a customer mobile number.\nPlease enter a 10-digit Indian mobile number for Shiprocket dispatch:`,
+        '7358997258'
+      )
+      if (!enteredPhone) {
+        setAdminNotification(`Shipment creation cancelled: 10-digit mobile number is required by Shiprocket.`)
+        setTimeout(() => setAdminNotification(''), 4000)
+        return
+      }
+      const cleaned = normalizeIndianPhone(enteredPhone)
+      if (!isValidIndianPhone(cleaned)) {
+        setAdminNotification(`Invalid mobile number "${enteredPhone}". Must be a 10-digit Indian mobile number (e.g. 7358997258).`)
+        setTimeout(() => setAdminNotification(''), 5000)
+        return
+      }
+      phoneToUse = cleaned
+      // Update order in local state and database
+      order.customer = { ...(order.customer || {}), phone: phoneToUse }
+      order.customer_phone = phoneToUse
+      try {
+        await supabase.from('orders').update({ customer_phone: phoneToUse }).eq('id', order.id)
+      } catch (err) {
+        console.warn('Could not persist customer_phone update to database:', err)
+      }
+    }
+
     setCreatingShipmentId(order.id)
     setAdminNotification(`Generating Shiprocket shipment for order #${order.id}...`)
 
@@ -653,10 +717,15 @@ export default function AdminDashboard({
       const payload = mapOrderToShiprocketShape(order)
       const result = await createShipment(payload)
 
+      if (!result || result.error) {
+        throw new Error(result?.error || 'Failed to create shipment on Shiprocket.')
+      }
+
       const shiprocketOrderId = result?.shiprocket_order_id ? String(result.shiprocket_order_id) : null
       const shipmentId = result?.shipment_id ? Number(result.shipment_id) : null
       const awbCode = result?.awb_code ? String(result.awb_code) : null
 
+      // Save IDs only on successful call
       const updated = await updateOrderShipment(order.id, {
         shiprocketOrderId,
         shipmentId,
@@ -665,7 +734,7 @@ export default function AdminDashboard({
         shippedAt: new Date().toISOString(),
       })
 
-      // Update state
+      // Update state to Shipped only on success
       setOrders((prev) =>
         prev.map((o) =>
           o.id === order.id
@@ -686,8 +755,9 @@ export default function AdminDashboard({
       setTimeout(() => setAdminNotification(''), 4500)
     } catch (err) {
       console.error('Shiprocket creation error:', err)
+      // Never mark as shipped on failure. Show clear error message from edge function / validation
       setAdminNotification(`Failed to create shipment: ${err.message || 'Check edge function logs'}`)
-      setTimeout(() => setAdminNotification(''), 5000)
+      setTimeout(() => setAdminNotification(''), 6000)
     } finally {
       setCreatingShipmentId(null)
     }
@@ -1678,16 +1748,16 @@ export default function AdminDashboard({
                               </span>
                             </td>
                             <td>
-                              {order.awbCode ? (
+                              {order.awbCode || order.shipmentId ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                   <Truck size={11} className="text-emerald-700" />
-                                  {order.awbCode}
+                                  {order.awbCode || `ID: ${order.shipmentId}`}
                                 </span>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => handleCreateShipment(order)}
-                                  disabled={creatingShipmentId === order.id}
+                                  disabled={Boolean(creatingShipmentId)}
                                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-800 text-white hover:bg-emerald-900 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
                                   title="Create shipment on Shiprocket"
                                 >
@@ -3964,11 +4034,11 @@ export default function AdminDashboard({
                             </select>
                           </td>
                           <td>
-                            {order.awbCode ? (
+                            {order.awbCode || order.shipmentId ? (
                               <div className="flex flex-col gap-1 items-start">
                                 <span className="inline-flex items-center gap-1 text-xs font-mono font-medium text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                   <Truck size={12} className="text-emerald-700" />
-                                  AWB: {order.awbCode}
+                                  AWB: {order.awbCode || `ID: ${order.shipmentId}`}
                                 </span>
                                 <span className="text-[11px] text-slate-500">
                                   {order.shippingStatus || 'Shipment Created'}
@@ -3978,7 +4048,7 @@ export default function AdminDashboard({
                               <button
                                 type="button"
                                 onClick={() => handleCreateShipment(order)}
-                                disabled={creatingShipmentId === order.id}
+                                disabled={Boolean(creatingShipmentId)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-800 text-white hover:bg-emerald-900 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
                                 title="Create shipment on Shiprocket"
                               >

@@ -1,0 +1,176 @@
+// https://tacyfcsyswlwbdtminnz.supabase.co/functions/v1/shiprocket
+import { createClient } from "npm:@supabase/supabase-js@2";
+
+// ---------- Config ----------
+const BASE = "https://apiv2.shiprocket.in/v1/external";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const json = (body, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+const admin = createClient(
+  Deno.env.get("SUPABASE_URL"),
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+);
+
+// ---------- Shiprocket client ----------
+async function login() {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: Deno.env.get("SHIPROCKET_EMAIL"),
+      password: Deno.env.get("SHIPROCKET_PASSWORD"),
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.token) {
+    throw new Error(data.message || "Shiprocket login failed");
+  }
+
+  // Token is valid for 10 days, refresh after 9
+  const expires_at = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString();
+  await admin.from("shiprocket_tokens").upsert({ id: 1, token: data.token, expires_at });
+  return data.token;
+}
+
+async function getToken(force = false) {
+  if (!force) {
+    const { data } = await admin
+      .from("shiprocket_tokens")
+      .select("token, expires_at")
+      .eq("id", 1)
+      .maybeSingle();
+    if (data && new Date(data.expires_at) > new Date()) return data.token;
+  }
+  return login();
+}
+
+async function shiprocket(path, { method = "GET", body, query } = {}) {
+  const url = new URL(`${BASE}${path}`);
+  if (query) {
+    Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, String(v)));
+  }
+
+  const call = (token) =>
+    fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+  let res = await call(await getToken());
+  if (res.status === 401) res = await call(await getToken(true));
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Shiprocket error ${res.status}`);
+  return data;
+}
+
+// ---------- Actions ----------
+const actions = {
+  // Delivery check + courier rates
+  async serviceability({ deliveryPincode, weight, cod = 0 }) {
+    const data = await shiprocket("/courier/serviceability/", {
+      query: {
+        pickup_postcode: Deno.env.get("SHIPROCKET_PICKUP_PINCODE"),
+        delivery_postcode: deliveryPincode,
+        weight,
+        cod,
+      },
+    });
+
+    const couriers = data?.data?.available_courier_companies ?? [];
+    return couriers.map((c) => ({
+      courier_id: c.courier_company_id,
+      name: c.courier_name,
+      rate: c.rate,
+      etd: c.etd,
+      days: c.estimated_delivery_days,
+    }));
+  },
+
+  // Create order -> assign AWB -> schedule pickup
+  async createOrder({ order }) {
+    const created = await shiprocket("/orders/create/adhoc", {
+      method: "POST",
+      body: {
+        order_id: order.id,
+        order_date: order.date, // "YYYY-MM-DD HH:mm"
+        pickup_location: Deno.env.get("SHIPROCKET_PICKUP_LOCATION"),
+        billing_customer_name: order.customer.firstName,
+        billing_last_name: order.customer.lastName ?? "",
+        billing_address: order.customer.address,
+        billing_city: order.customer.city,
+        billing_pincode: order.customer.pincode,
+        billing_state: order.customer.state,
+        billing_country: "India",
+        billing_email: order.customer.email,
+        billing_phone: order.customer.phone,
+        shipping_is_billing: true,
+        order_items: order.items.map((i) => ({
+          name: i.name,
+          sku: i.sku,
+          units: i.qty,
+          selling_price: i.price,
+        })),
+        payment_method: order.cod ? "COD" : "Prepaid",
+        sub_total: order.total,
+        length: order.package.length,
+        breadth: order.package.breadth,
+        height: order.package.height,
+        weight: order.package.weight,
+      },
+    });
+
+    const shipmentId = created.shipment_id;
+
+    const awb = await shiprocket("/courier/assign/awb", {
+      method: "POST",
+      body: {
+        shipment_id: shipmentId,
+        ...(order.courierId ? { courier_id: order.courierId } : {}),
+      },
+    });
+
+    await shiprocket("/courier/generate/pickup", {
+      method: "POST",
+      body: { shipment_id: [shipmentId] },
+    });
+
+    return {
+      shiprocket_order_id: created.order_id,
+      shipment_id: shipmentId,
+      awb_code: awb?.response?.data?.awb_code ?? null,
+    };
+  },
+
+  // Tracking
+  async track({ awb }) {
+    return shiprocket(`/courier/track/awb/${awb}`);
+  },
+};
+
+// ---------- Handler ----------
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  try {
+    const { action, ...payload } = await req.json();
+    const handler = actions[action];
+    if (!handler) return json({ error: "Unknown action" }, 400);
+    return json(await handler(payload));
+  } catch (e) {
+    return json({ error: e.message }, 400);
+  }
+});

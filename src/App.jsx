@@ -16,6 +16,11 @@ import AuthModal from './components/AuthModal'
 import CheckoutModal from './components/CheckoutModal'
 import AdminDashboard from './components/AdminDashboard'
 import Toast from './components/Toast'
+import CustomerAgentChat from './components/CustomerAgentChat'
+import PrivacyPolicyPage from './components/PrivacyPolicyPage'
+import TermsOfServicePage from './components/TermsOfServicePage'
+import DeleteAccountPage from './components/DeleteAccountPage'
+import './components/LegalPages.css'
 
 import { PRODUCTS as INITIAL_PRODUCTS } from './data/mockData'
 import {
@@ -363,7 +368,7 @@ export default function App() {
     const isUserAdmin = Boolean(isAdmin || userObj?.role === 'admin')
     if (isUserAdmin) {
       setIsAdminView(true)
-      showToast('Admin Console Unlocked 🛡️', 'Welcome, Administrator.')
+      showToast('Admin Console Unlocked', 'Welcome, Administrator.')
     } else {
       setIsAdminView(false)
       showToast(`Welcome, ${userObj.name}!`, 'You are now signed in.')
@@ -634,6 +639,7 @@ export default function App() {
                 {/* Discover Our Collections Grid */}
                 <CollectionsSection
                   products={filteredProducts}
+                  allProducts={products}
                   onAddToCart={handleAddToCart}
                   onQuickView={(prod) => setQuickViewProduct(prod)}
                   onOpenDetail={(prod) => navigate(`/product/${prod.id}`)}
@@ -736,6 +742,44 @@ export default function App() {
                 onToggleLang={handleToggleLang}
                 currentUser={currentUser}
                 onOpenAuth={() => setIsAuthModalOpen(true)}
+              />
+            }
+          />
+
+          {/* Privacy Policy */}
+          <Route path="/privacy" element={<PrivacyPolicyPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+
+          {/* Terms of Service */}
+          <Route path="/terms" element={<TermsOfServicePage />} />
+          <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+          <Route path="/terms-and-conditions" element={<TermsOfServicePage />} />
+
+          {/* Delete Account & Meta Data Deletion */}
+          <Route
+            path="/delete-account"
+            element={
+              <DeleteAccountPage
+                currentUser={currentUser}
+                onLogout={handleLogout}
+              />
+            }
+          />
+          <Route
+            path="/data-deletion"
+            element={
+              <DeleteAccountPage
+                currentUser={currentUser}
+                onLogout={handleLogout}
+              />
+            }
+          />
+          <Route
+            path="/account/delete"
+            element={
+              <DeleteAccountPage
+                currentUser={currentUser}
+                onLogout={handleLogout}
               />
             }
           />
@@ -858,7 +902,7 @@ export default function App() {
               localStorage.removeItem('esan_cart_guest')
               localStorage.removeItem('esan_cart')
             } catch (_) {}
-            showToast('Order Placed Successfully! 🎉', 'Your order has been saved and is being processed.')
+            showToast('Order Placed Successfully!', 'Your order has been saved and is being processed.')
           } catch (err) {
             console.error('Failed to create order in database, saving locally:', err)
             const localOrder = {
@@ -867,8 +911,13 @@ export default function App() {
               customer: {
                 name: checkoutData.formData?.name?.trim() || currentUser?.name || 'Guest Shopper',
                 email: checkoutData.formData?.email?.trim() || currentUser?.email || 'guest@esanfoods.com',
+                phone: checkoutData.formData?.phone?.trim() || currentUser?.phone || '',
                 avatar: currentUser?.avatar || null,
               },
+              shippingAddress: checkoutData.formData?.address || '',
+              shippingCity: checkoutData.formData?.city || '',
+              shippingState: checkoutData.formData?.state || 'Tamil Nadu',
+              shippingZip: checkoutData.formData?.zip || '',
               items: (checkoutData.cartItems || cartItems).map((ci) => ({
                 productId: ci.product?.id || ci.id,
                 name: ci.product?.name || ci.name,
@@ -890,6 +939,17 @@ export default function App() {
             } catch (_) {}
           }
         }}
+      />
+
+      {/* Customer Automatic Reply Agent */}
+      <CustomerAgentChat
+        onNavigateToProduct={(productId) => {
+          navigate(`/product/${productId}`)
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        onAddToCart={handleAddToCart}
+        currentUser={currentUser}
+        allProducts={products}
       />
 
       {/* Toast Notification */}

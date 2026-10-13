@@ -1,6 +1,38 @@
 import { supabase } from '../lib/supabase'
 
 /**
+ * Normalizes an Indian phone number: strips spaces, dashes, leading '+91', '91' (when 12 digits), or leading '0'.
+ *
+ * @param {string} raw - Raw phone input
+ * @returns {string} 10-digit numeric phone string or trimmed input
+ */
+export function normalizeIndianPhone(raw) {
+  let cleaned = String(raw || '')
+    .trim()
+    .replace(/[\s-]/g, '')
+  if (cleaned.startsWith('+91')) {
+    cleaned = cleaned.slice(3)
+  } else if (cleaned.startsWith('91') && cleaned.length === 12) {
+    cleaned = cleaned.slice(2)
+  }
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.slice(1)
+  }
+  return cleaned
+}
+
+/**
+ * Validates whether a phone number is a valid 10-digit Indian mobile number (starts with 6-9).
+ *
+ * @param {string} phone - Phone input
+ * @returns {boolean}
+ */
+export function isValidIndianPhone(phone) {
+  const normalized = normalizeIndianPhone(phone)
+  return /^[6-9]\d{9}$/.test(normalized)
+}
+
+/**
  * Invokes the deployed Supabase Edge Function 'shiprocket'.
  * Throws when Supabase invoke returns an error or when response data contains an error.
  *
@@ -17,8 +49,21 @@ async function invokeShiprocket(action, payload = {}) {
   })
 
   if (error) {
-    const errorMsg = error.message || 'Failed to communicate with Shiprocket service'
-    throw new Error(errorMsg)
+    let detailedMsg = error.message || 'Failed to communicate with Shiprocket service'
+    if (error.context && typeof error.context.json === 'function') {
+      try {
+        const body = await error.context.json()
+        if (body?.error) {
+          detailedMsg = typeof body.error === 'string' ? body.error : JSON.stringify(body.error)
+        } else if (body?.message) {
+          detailedMsg = body.message
+        }
+      } catch {
+        // Body already consumed or not JSON
+      }
+    }
+    console.error(`[shiprocket] Edge Function "${action}" error:`, detailedMsg)
+    throw new Error(detailedMsg)
   }
 
   if (data && data.error) {

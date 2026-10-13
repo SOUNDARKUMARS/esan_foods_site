@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import {
   X,
   CheckCircle,
@@ -6,16 +7,18 @@ import {
   Truck,
   CreditCard,
   ArrowRight,
-  Sparkles,
-  QrCode,
-  Zap,
   AlertCircle,
   Lock,
   Loader2,
   Clock,
+  Zap,
 } from 'lucide-react'
 import { startRazorpayCheckout } from '../data/razorpayService'
-import { checkServiceability } from '../services/shiprocket'
+import {
+  checkServiceability,
+  normalizeIndianPhone,
+  isValidIndianPhone,
+} from '../services/shiprocket'
 
 export default function CheckoutModal({
   isOpen,
@@ -39,7 +42,9 @@ export default function CheckoutModal({
 
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
   const [paymentError, setPaymentError] = useState('')
+  const [phoneError, setPhoneError] = useState('')
   const [confirmedPaymentDetails, setConfirmedPaymentDetails] = useState(null)
+  const [orderReference] = useState(() => `#ESN-${Math.floor(100000 + Math.random() * 900000)}`)
 
   // Shiprocket serviceability state
   const [shippingLoading, setShippingLoading] = useState(false)
@@ -56,9 +61,10 @@ export default function CheckoutModal({
         ...prev,
         name: currentUser?.name || prev.name || '',
         email: currentUser?.email || prev.email || '',
-        phone: currentUser?.phone || prev.phone || '',
+        phone: normalizeIndianPhone(currentUser?.phone || prev.phone || ''),
       }))
       setPaymentError('')
+      setPhoneError('')
       setIsProcessingPayment(false)
     }
   }, [isOpen, currentUser])
@@ -143,9 +149,48 @@ export default function CheckoutModal({
   const tax = afterDiscount * 0.08
   const grandTotal = Math.max(0, afterDiscount + shippingCost + tax)
 
+  const handlePhoneChange = (e) => {
+    const val = e.target.value
+    setFormData((prev) => ({ ...prev, phone: val }))
+    if (phoneError) {
+      if (isValidIndianPhone(val)) {
+        setPhoneError('')
+      }
+    }
+  }
+
+  const handlePhoneBlur = () => {
+    const raw = formData.phone
+    if (!raw || !raw.trim()) {
+      setPhoneError('Mobile phone number is required.')
+      return
+    }
+    const normalized = normalizeIndianPhone(raw)
+    if (!/^[6-9]\d{9}$/.test(normalized)) {
+      setPhoneError('Please enter a valid 10-digit Indian mobile number (starts with 6-9).')
+    } else {
+      setPhoneError('')
+      setFormData((prev) => ({ ...prev, phone: normalized }))
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setPaymentError('')
+
+    // Validate 10-digit Indian phone number
+    const normalizedPhone = normalizeIndianPhone(formData.phone)
+    if (!/^[6-9]\d{9}$/.test(normalizedPhone)) {
+      setPhoneError('Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).')
+      setPaymentError('Please provide a valid Indian mobile number to complete checkout.')
+      return
+    }
+    setPhoneError('')
+
+    const submissionFormData = {
+      ...formData,
+      phone: normalizedPhone,
+    }
 
     // Block order placement when the pincode is not serviceable
     if (shippingServiceable === false) {
@@ -167,10 +212,10 @@ export default function CheckoutModal({
       await startRazorpayCheckout({
         amount: grandTotal,
         customer: {
-          name: formData.name.trim(),
-          email: formData.email.trim(),
-          phone: formData.phone.trim(),
-          address: `${formData.address}, ${formData.city} ${formData.zip}`,
+          name: submissionFormData.name.trim(),
+          email: submissionFormData.email.trim(),
+          phone: submissionFormData.phone.trim(),
+          address: `${submissionFormData.address}, ${submissionFormData.city} ${submissionFormData.zip}`,
         },
         orderRef: `ESN-${Date.now()}`,
         onSuccess: (paymentResult) => {
@@ -179,7 +224,7 @@ export default function CheckoutModal({
           setStep('success')
 
           onOrderSuccess({
-            formData,
+            formData: submissionFormData,
             cartItems,
             subtotal,
             discountAmount,
@@ -208,7 +253,7 @@ export default function CheckoutModal({
     // 2. Direct flow for COD or offline fallback
     setStep('success')
     onOrderSuccess({
-      formData,
+      formData: submissionFormData,
       cartItems,
       subtotal,
       discountAmount,
@@ -216,7 +261,7 @@ export default function CheckoutModal({
       tax,
       grandTotal,
       paymentDetails: {
-        method: formData.paymentMethod,
+        method: submissionFormData.paymentMethod,
         paymentId: `OFFLINE-${Date.now()}`,
         verified: false,
       },
@@ -262,7 +307,7 @@ export default function CheckoutModal({
             <div className="order-details-card">
               <div className="order-meta-row">
                 <span>Order Reference:</span>
-                <strong>#ESN-{Math.floor(100000 + Math.random() * 900000)}</strong>
+                <strong>{orderReference}</strong>
               </div>
 
               {confirmedPaymentDetails?.paymentId && (
@@ -385,6 +430,24 @@ export default function CheckoutModal({
                   </div>
                 </div>
                 <div className="form-field">
+                  <label>Mobile Number (10-Digit Indian Mobile) *</label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    placeholder="e.g. 9876543210"
+                    value={formData.phone}
+                    onChange={handlePhoneChange}
+                    onBlur={handlePhoneBlur}
+                    style={phoneError ? { borderColor: '#ef4444' } : {}}
+                    required
+                  />
+                  {phoneError && (
+                    <span style={{ color: '#b91c1c', fontSize: '0.76rem', marginTop: '4px', fontWeight: 600 }}>
+                      {phoneError}
+                    </span>
+                  )}
+                </div>
+                <div className="form-field">
                   <label>Street Address</label>
                   <input
                     type="text"
@@ -462,7 +525,7 @@ export default function CheckoutModal({
                   <div className="mt-2 p-3 bg-slate-100 border border-slate-300 rounded-lg text-xs">
                     <div className="flex items-center gap-1.5 text-slate-800 font-medium">
                       <AlertCircle className="w-4 h-4 text-slate-600 shrink-0" />
-                      <span>Delivery not available to pincode {formData.zip}</span>
+                      <span>{shippingCheckError || `Delivery not available to pincode ${formData.zip}`}</span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-1 pl-5">
                       Order placement is blocked until a serviceable destination pincode is entered.

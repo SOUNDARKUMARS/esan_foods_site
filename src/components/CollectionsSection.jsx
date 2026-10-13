@@ -9,6 +9,8 @@ import {
 
 export default function CollectionsSection({
   products,
+  allProducts,
+  categories,
   onAddToCart,
   onQuickView,
   onOpenDetail,
@@ -37,16 +39,21 @@ export default function CollectionsSection({
   }
 
   const availableCategories = React.useMemo(() => {
+    if (categories && Array.isArray(categories) && categories.length > 0) {
+      const formatted = categories.map((c) => (typeof c === 'string' ? c : c.name))
+      return formatted.includes('All Products') ? formatted : ['All Products', ...formatted]
+    }
+    const sourceProducts = allProducts && allProducts.length > 0 ? allProducts : products
     const list = ['All Products']
     const seen = new Set()
-    products.forEach((p) => {
+    sourceProducts.forEach((p) => {
       if (p.category && !seen.has(p.category.trim())) {
         seen.add(p.category.trim())
         list.push(p.category.trim())
       }
     })
     return list
-  }, [products])
+  }, [categories, allProducts, products])
 
   return (
     <section className="collections-section" id="collections">

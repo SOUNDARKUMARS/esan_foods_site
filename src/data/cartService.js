@@ -62,6 +62,8 @@ function sanitizeCartItems(items) {
   }))
 }
 
+let hasUserCartsTable = true
+
 /**
  * Fetch a specific user's cart from Supabase database.
  * Checks public.user_carts first, then Supabase auth user_metadata.
@@ -70,19 +72,23 @@ function sanitizeCartItems(items) {
 export async function fetchUserCart(userId) {
   if (!userId) return []
 
-  // 1. Try public.user_carts table
-  try {
-    const { data, error } = await supabase
-      .from('user_carts')
-      .select('items')
-      .eq('user_id', userId)
-      .maybeSingle()
+  // 1. Try public.user_carts table if available
+  if (hasUserCartsTable) {
+    try {
+      const { data, error } = await supabase
+        .from('user_carts')
+        .select('items')
+        .eq('user_id', userId)
+        .maybeSingle()
 
-    if (data && !error && Array.isArray(data.items)) {
-      return data.items
+      if (error) {
+        hasUserCartsTable = false
+      } else if (data && Array.isArray(data.items)) {
+        return data.items
+      }
+    } catch (_) {
+      hasUserCartsTable = false
     }
-  } catch (err) {
-    // Non-blocking: table might not exist yet
   }
 
   // 2. Try Supabase Auth user_metadata (stored directly in auth.users PostgreSQL table)
@@ -94,7 +100,7 @@ export async function fetchUserCart(userId) {
         return metaCart
       }
     }
-  } catch (err) {
+  } catch (_) {
     // Non-blocking
   }
 
@@ -131,18 +137,23 @@ export async function saveUserCart(userId, items = []) {
   }
 
   saveDebounceTimer = setTimeout(async () => {
-    // 1. Attempt public.user_carts table upsert
-    try {
-      await supabase.from('user_carts').upsert(
-        {
-          user_id: userId,
-          items: cleanItems,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' }
-      )
-    } catch (_) {
-      // Table may not exist yet
+    // 1. Attempt public.user_carts table upsert if available
+    if (hasUserCartsTable) {
+      try {
+        const { error } = await supabase.from('user_carts').upsert(
+          {
+            user_id: userId,
+            items: cleanItems,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
+        )
+        if (error) {
+          hasUserCartsTable = false
+        }
+      } catch (_) {
+        hasUserCartsTable = false
+      }
     }
 
     // 2. Persist to Supabase Auth user_metadata in database

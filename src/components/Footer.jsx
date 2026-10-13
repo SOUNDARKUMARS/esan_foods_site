@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Send, Check, ShieldCheck, Leaf, Globe, Heart } from 'lucide-react'
 import esanLogo from '../assets/esan_foods_logo.png'
 
@@ -112,10 +113,9 @@ export default function Footer({ onSubscribeSuccess }) {
             <ul className="footer-links-list">
               <li><a href="#home">Track Your Order</a></li>
               <li><a href="#home">Shipping & Returns</a></li>
-              <li><a href="#home">Store Locator</a></li>
+              <li><Link to="/delete-account">Delete Account & Data</Link></li>
               <li><a href="#home">Quality Guarantee</a></li>
               <li><a href="#home">Contact Concierge</a></li>
-              <li><a href="#home">Accessibility</a></li>
             </ul>
           </div>
         </div>
@@ -126,11 +126,11 @@ export default function Footer({ onSubscribeSuccess }) {
             © {new Date().getFullYear()} Esan Foods. All Rights Reserved. Pure Herbs • Healthy Living.
           </p>
           <div className="legal-links">
-            <a href="#home">Privacy Policy</a>
+            <Link to="/privacy">Privacy Policy</Link>
             <span className="dot">•</span>
-            <a href="#home">Terms of Service</a>
+            <Link to="/terms">Terms of Service</Link>
             <span className="dot">•</span>
-            <a href="#home">Cookie Preferences</a>
+            <Link to="/delete-account">Delete Account</Link>
           </div>
         </div>
       </div>

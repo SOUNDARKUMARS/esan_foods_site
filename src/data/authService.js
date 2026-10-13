@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase'
+import { normalizeIndianPhone, isValidIndianPhone } from '../services/shiprocket'
 
 const AUTH_STORAGE_KEY = 'juicera_auth_session'
 
@@ -76,6 +77,7 @@ export async function syncUserProfile(sbUser) {
         'Juicera Member',
       avatar_url: sbUser.user_metadata?.avatar_url || null,
       role: isNewAdmin ? 'admin' : 'user',
+      phone: sbUser.user_metadata?.phone || '',
       loyalty_points: 50,
     }
 
@@ -194,14 +196,21 @@ export async function signInWithEmailPassword(email, password) {
   }
 }
 
-// 2. Register with Full Name, Email, and Password (Triggers verification OTP)
-export async function registerWithEmailPassword(fullName, email, password) {
+// 2. Register with Full Name, Email, Password, and Mobile Phone (Triggers verification OTP)
+export async function registerWithEmailPassword(fullName, email, password, phone = '') {
   const cleanName = (fullName || '').trim()
   const cleanEmail = (email || '').trim().toLowerCase()
   const cleanPassword = (password || '').trim()
+  const cleanPhone = normalizeIndianPhone(phone)
 
   if (!cleanEmail || !cleanPassword) {
     return { success: false, error: 'Email and password are required.' }
+  }
+  if (!cleanPhone || !isValidIndianPhone(cleanPhone)) {
+    return {
+      success: false,
+      error: 'A valid 10-digit Indian mobile number is required to register.',
+    }
   }
   if (cleanPassword.length < 6) {
     return { success: false, error: 'Password must be at least 6 characters.' }
@@ -214,6 +223,7 @@ export async function registerWithEmailPassword(fullName, email, password) {
       options: {
         data: {
           full_name: cleanName || cleanEmail.split('@')[0],
+          phone: cleanPhone,
         },
       },
     })
@@ -404,6 +414,53 @@ export async function verifySupabaseEmailOtp(email, token) {
     return {
       success: false,
       error: err.message || 'OTP verification failed.',
+    }
+  }
+}
+
+// 6. Update user's phone number anytime from account profile
+export async function updateUserPhone(phone) {
+  const cleanPhone = normalizeIndianPhone(phone)
+  if (!isValidIndianPhone(cleanPhone)) {
+    return {
+      success: false,
+      error: 'Please enter a valid 10-digit Indian mobile number (e.g. 9876543210).',
+    }
+  }
+
+  try {
+    // Update in Supabase Auth user_metadata
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        phone: cleanPhone,
+      },
+    })
+
+    if (error) {
+      return { success: false, error: error.message }
+    }
+
+    // Also attempt updating profiles table if present
+    if (data?.user?.id) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ phone: cleanPhone })
+          .eq('id', data.user.id)
+      } catch (pErr) {
+        console.warn('Could not update phone in profiles table:', pErr)
+      }
+    }
+
+    const appUser = await syncUserProfile(data.user)
+    return {
+      success: true,
+      user: appUser,
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message || 'Unable to update phone number.',
     }
   }
 }
